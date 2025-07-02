@@ -12,6 +12,9 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   currentFirmId: string | null;
+  checkEmailVerification: () => Promise<boolean>;
+  resendVerificationEmail: () => Promise<void>;
+  isEmailVerified: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
@@ -21,7 +24,10 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signOut: async () => {},
   refreshProfile: async () => {},
-  currentFirmId: null
+  currentFirmId: null,
+  checkEmailVerification: async () => false,
+  resendVerificationEmail: async () => {},
+  isEmailVerified: false
 });
 
 export const useAuth = () => {
@@ -37,6 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
   const { toast } = useToast();
 
   const loadProfile = async (userId: string) => {
@@ -65,6 +72,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const checkEmailVerification = async (): Promise<boolean> => {
+    if (!user) return false;
+    
+    const verified = user.email_confirmed_at !== null;
+    setIsEmailVerified(verified);
+    return verified;
+  };
+
+  const resendVerificationEmail = async () => {
+    if (!user?.email) return;
+    
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Verification email sent",
+        description: "Please check your email for the verification link.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to send verification email",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const refreshProfile = async () => {
     if (!user?.id) return;
     
@@ -81,11 +123,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
+          // Check email verification
+          setIsEmailVerified(session.user.email_confirmed_at !== null);
+          
           // Load profile data
           const profileData = await loadProfile(session.user.id);
           setProfile(profileData);
         } else {
           setProfile(null);
+          setIsEmailVerified(false);
         }
         
         setLoading(false);
@@ -99,6 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        setIsEmailVerified(session.user.email_confirmed_at !== null);
         const profileData = await loadProfile(session.user.id);
         setProfile(profileData);
       }
@@ -112,6 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setIsEmailVerified(false);
   };
 
   const currentFirmId = profile?.current_firm_id || profile?.firm_id || null;
@@ -124,7 +172,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       loading, 
       signOut, 
       refreshProfile,
-      currentFirmId
+      currentFirmId,
+      checkEmailVerification,
+      resendVerificationEmail,
+      isEmailVerified
     }}>
       {children}
     </AuthContext.Provider>
