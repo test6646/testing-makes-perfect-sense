@@ -32,7 +32,7 @@ interface Event {
 }
 
 const Payments = () => {
-  const { user, profile, loading } = useAuth();
+  const { user, loading, currentFirmId } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
@@ -44,20 +44,20 @@ const Payments = () => {
       return;
     }
 
-    if (profile?.firm_id) {
+    if (currentFirmId) {
       loadEvents();
     }
-  }, [user, loading, profile, navigate]);
+  }, [user, loading, currentFirmId, navigate]);
 
   const loadEvents = async () => {
-    if (!profile?.firm_id) {
-      console.log('No firm_id available, skipping payments load');
+    if (!currentFirmId) {
+      console.log('No currentFirmId available, skipping payments load');
       return;
     }
 
     try {
       setLoadingEvents(true);
-      console.log('Loading events for payments for firm:', profile.firm_id);
+      console.log('Loading events for payments for firm:', currentFirmId);
       
       const { data, error } = await supabase
         .from('events')
@@ -67,7 +67,7 @@ const Payments = () => {
           photographer:profiles!events_photographer_id_fkey(full_name),
           videographer:profiles!events_videographer_id_fkey(full_name)
         `)
-        .eq('firm_id', profile.firm_id)
+        .eq('firm_id', currentFirmId)
         .not('total_amount', 'is', null)
         .order('event_date', { ascending: false });
 
@@ -139,16 +139,16 @@ const Payments = () => {
     );
   }
 
-  if (!profile?.firm_id) {
+  if (!currentFirmId) {
     return (
       <TopNavbar>
         <div className="max-w-2xl mx-auto text-center py-12">
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Receipt className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">No Firm Associated</h1>
+          <h1 className="text-2xl font-bold mb-2">No Firm Selected</h1>
           <p className="text-muted-foreground mb-6">
-            You need to be associated with a firm to manage payments. Please contact your administrator or create a firm.
+            Please select a firm from the dropdown in the navbar to view payments and invoices.
           </p>
           <Button onClick={() => navigate('/dashboard')}>
             Go to Dashboard

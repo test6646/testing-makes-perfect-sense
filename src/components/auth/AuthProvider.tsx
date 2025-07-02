@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  currentFirmId: string | null;
 }
 
 const AuthContext = createContext<AuthContextType>({ 
@@ -19,7 +20,8 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   signOut: async () => {},
-  refreshProfile: async () => {}
+  refreshProfile: async () => {},
+  currentFirmId: null
 });
 
 export const useAuth = () => {
@@ -112,8 +114,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setProfile(null);
   };
 
+  const currentFirmId = profile?.current_firm_id || profile?.firm_id || null;
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      profile, 
+      loading, 
+      signOut, 
+      refreshProfile,
+      currentFirmId
+    }}>
       {children}
     </AuthContext.Provider>
   );

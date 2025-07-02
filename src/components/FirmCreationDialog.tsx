@@ -36,24 +36,35 @@ const FirmCreationDialog = ({ open, onOpenChange, onFirmCreated }: FirmCreationD
     setLoading(true);
     
     try {
+      // Get session for authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
+
       // Call the edge function to create firm with spreadsheet
       const { data, error } = await supabase.functions.invoke('create-firm-with-spreadsheet', {
         body: { firmName: firmName.trim() },
         headers: {
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
       if (error) throw error;
 
-      toast({
-        title: "Firm created successfully!",
-        description: `${firmName} has been created with integrated Google Spreadsheet`,
-      });
+      if (data?.success) {
+        toast({
+          title: "Firm created successfully!",
+          description: `${firmName} has been created and you've been added as admin`,
+        });
 
-      setFirmName('');
-      onOpenChange(false);
-      onFirmCreated();
+        setFirmName('');
+        onOpenChange(false);
+        onFirmCreated();
+      } else {
+        throw new Error(data?.message || 'Failed to create firm');
+      }
     } catch (error: any) {
       console.error('Error creating firm:', error);
       toast({
@@ -75,7 +86,7 @@ const FirmCreationDialog = ({ open, onOpenChange, onFirmCreated }: FirmCreationD
             <span>Create New Firm</span>
           </DialogTitle>
           <DialogDescription>
-            Create a new photography firm with integrated Google Spreadsheet for data management.
+            Create a new photography firm and become its admin. You'll be able to manage events, clients, and team members.
           </DialogDescription>
         </DialogHeader>
         
@@ -94,10 +105,10 @@ const FirmCreationDialog = ({ open, onOpenChange, onFirmCreated }: FirmCreationD
           <div className="bg-muted/50 p-3 rounded-md">
             <h4 className="text-sm font-medium mb-2">What will be created:</h4>
             <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• New firm in your database</li>
-              <li>• Google Spreadsheet with pre-structured sheets</li>
-              <li>• Events, Clients, Payments, Tasks & Expenses tracking</li>
-              <li>• Real-time data synchronization</li>
+              <li>• New firm in the database</li>
+              <li>• You'll be added as the Admin</li>
+              <li>• Google Spreadsheet integration (when available)</li>
+              <li>• Full access to manage the firm</li>
             </ul>
           </div>
 
@@ -106,7 +117,7 @@ const FirmCreationDialog = ({ open, onOpenChange, onFirmCreated }: FirmCreationD
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Firm & Spreadsheet'}
+              {loading ? 'Creating...' : 'Create Firm'}
             </Button>
           </div>
         </form>

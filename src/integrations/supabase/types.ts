@@ -229,6 +229,38 @@ export type Database = {
           },
         ]
       }
+      firm_members: {
+        Row: {
+          firm_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          firm_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          firm_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_members_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       firms: {
         Row: {
           created_at: string
@@ -374,6 +406,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          current_firm_id: string | null
           firm_id: string | null
           full_name: string
           id: string
@@ -384,6 +417,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          current_firm_id?: string | null
           firm_id?: string | null
           full_name: string
           id?: string
@@ -394,6 +428,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          current_firm_id?: string | null
           firm_id?: string | null
           full_name?: string
           id?: string
@@ -403,6 +438,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_current_firm_id_fkey"
+            columns: ["current_firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_firm_id_fkey"
             columns: ["firm_id"]

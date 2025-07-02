@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,20 +13,88 @@ serve(async (req) => {
   }
 
   try {
-    const { firmName, userId } = await req.json()
-    console.log('Creating firm with spreadsheet:', { firmName, userId })
+    const { firmName } = await req.json()
+    console.log('Creating firm with spreadsheet:', { firmName })
 
-    // Create a simple firm without Google Sheets integration for now
-    // This will be enhanced once Google Sheets credentials are properly configured
-    const firmId = crypto.randomUUID()
+    // Get the authorization header
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('No authorization header')
+    }
+
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
-    console.log('Firm created successfully:', firmId)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+
+    // Get user from auth header
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    
+    if (userError || !user) {
+      throw new Error('Invalid user token')
+    }
+
+    console.log('User authenticated:', user.id)
+
+    // Create firm in database
+    const { data: firm, error: firmError } = await supabase
+      .from('firms')
+      .insert({
+        name: firmName,
+        created_by: user.id,
+        spreadsheet_id: null // Will be populated when Google Sheets is integrated
+      })
+      .select()
+      .single()
+
+    if (firmError) {
+      console.error('Error creating firm:', firmError)
+      throw firmError
+    }
+
+    console.log('Firm created:', firm)
+
+    // Add user as admin member of the firm
+    const { error: memberError } = await supabase
+      .from('firm_members')
+      .insert({
+        firm_id: firm.id,
+        user_id: user.id,
+        role: 'Admin'
+      })
+
+    if (memberError) {
+      console.error('Error adding user to firm:', memberError)
+      throw memberError
+    }
+
+    // Update user profile with firm_id and current_firm_id
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        firm_id: firm.id,
+        current_firm_id: firm.id
+      })
+      .eq('user_id', user.id)
+
+    if (profileError) {
+      console.error('Error updating profile:', profileError)
+      throw profileError
+    }
+
+    console.log('Firm created successfully:', firm.id)
 
     return new Response(
       JSON.stringify({
         success: true,
-        firmId: firmId,
-        spreadsheetId: null, // Will be populated when Google Sheets is integrated
+        firm: firm,
         message: 'Firm created successfully'
       }),
       {

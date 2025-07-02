@@ -20,7 +20,7 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 const Dashboard = () => {
-  const { user, profile, loading, refreshProfile } = useAuth();
+  const { user, profile, loading, refreshProfile, currentFirmId } = useAuth();
   const navigate = useNavigate();
   const [showFirmDialog, setShowFirmDialog] = useState(false);
   const [stats, setStats] = useState({
@@ -41,13 +41,13 @@ const Dashboard = () => {
       return;
     }
 
-    if (profile?.firm_id) {
+    if (currentFirmId) {
       loadDashboardStats();
     }
-  }, [user, loading, profile, navigate]);
+  }, [user, loading, currentFirmId, navigate]);
 
   const loadDashboardStats = async () => {
-    if (!profile?.firm_id) return;
+    if (!currentFirmId) return;
 
     try {
       setLoadingStats(true);
@@ -56,7 +56,7 @@ const Dashboard = () => {
       const { data: events, error: eventsError } = await supabase
         .from('events')
         .select('event_type, total_amount, created_at')
-        .eq('firm_id', profile.firm_id);
+        .eq('firm_id', currentFirmId);
 
       if (eventsError) throw eventsError;
 
@@ -64,19 +64,19 @@ const Dashboard = () => {
       const { count: clientsCount } = await supabase
         .from('clients')
         .select('*', { count: 'exact', head: true })
-        .eq('firm_id', profile.firm_id);
+        .eq('firm_id', currentFirmId);
 
       // Load revenue data
       const { data: payments } = await supabase
         .from('payments')
         .select('amount, created_at')
-        .eq('firm_id', profile.firm_id);
+        .eq('firm_id', currentFirmId);
 
       // Load pending payments
       const { data: pendingEvents } = await supabase
         .from('events')
         .select('balance_amount')
-        .eq('firm_id', profile.firm_id)
+        .eq('firm_id', currentFirmId)
         .gt('balance_amount', 0);
 
       const totalRevenue = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
@@ -141,7 +141,7 @@ const Dashboard = () => {
     );
   }
 
-  if (!profile?.firm_id) {
+  if (!currentFirmId) {
     return (
       <TopNavbar>
         <div className="max-w-2xl mx-auto text-center py-12">
@@ -343,21 +343,6 @@ const Dashboard = () => {
             </CardDescription>
           </CardHeader>
         </Card>
-
-        {/* System Status Alert */}
-        {loadingStats && (
-          <Card className="border-blue-200 bg-blue-50">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2 text-blue-800">
-                <AlertCircle className="h-5 w-5" />
-                <span>Loading Dashboard Data</span>
-              </CardTitle>
-              <CardDescription className="text-blue-700">
-                Please wait while we fetch your latest business statistics...
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
       </div>
     </TopNavbar>
   );
