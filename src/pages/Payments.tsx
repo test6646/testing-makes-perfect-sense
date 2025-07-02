@@ -36,7 +36,7 @@ const Payments = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -50,8 +50,15 @@ const Payments = () => {
   }, [user, loading, profile, navigate]);
 
   const loadEvents = async () => {
+    if (!profile?.firm_id) {
+      console.log('No firm_id available, skipping payments load');
+      return;
+    }
+
     try {
       setLoadingEvents(true);
+      console.log('Loading events for payments for firm:', profile.firm_id);
+      
       const { data, error } = await supabase
         .from('events')
         .select(`
@@ -60,13 +67,19 @@ const Payments = () => {
           photographer:profiles!events_photographer_id_fkey(full_name),
           videographer:profiles!events_videographer_id_fkey(full_name)
         `)
-        .eq('firm_id', profile?.firm_id)
+        .eq('firm_id', profile.firm_id)
         .not('total_amount', 'is', null)
         .order('event_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading events for payments:', error);
+        throw error;
+      }
+      
+      console.log('Loaded events for payments:', data?.length);
       setEvents(data || []);
     } catch (error: any) {
+      console.error('Error in loadEvents for payments:', error);
       toast({
         title: "Error loading events",
         description: error.message,
@@ -98,7 +111,7 @@ const Payments = () => {
     });
   };
 
-  if (loading || loadingEvents) {
+  if (loading) {
     return (
       <TopNavbar>
         <div className="space-y-6">
@@ -126,6 +139,25 @@ const Payments = () => {
     );
   }
 
+  if (!profile?.firm_id) {
+    return (
+      <TopNavbar>
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Receipt className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">No Firm Associated</h1>
+          <p className="text-muted-foreground mb-6">
+            You need to be associated with a firm to manage payments. Please contact your administrator or create a firm.
+          </p>
+          <Button onClick={() => navigate('/dashboard')}>
+            Go to Dashboard
+          </Button>
+        </div>
+      </TopNavbar>
+    );
+  }
+
   return (
     <TopNavbar>
       <div className="space-y-6">
@@ -137,8 +169,25 @@ const Payments = () => {
           </div>
         </div>
 
+        {/* Loading State */}
+        {loadingEvents && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-6">
+                  <div className="space-y-3">
+                    <div className="h-6 bg-muted rounded w-3/4"></div>
+                    <div className="h-4 bg-muted rounded w-1/2"></div>
+                    <div className="h-4 bg-muted rounded w-2/3"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Payment Cards */}
-        {events.length === 0 ? (
+        {!loadingEvents && events.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -154,7 +203,7 @@ const Payments = () => {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        ) : !loadingEvents ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {events.map((event) => (
               <PaymentInvoiceCard
@@ -166,7 +215,7 @@ const Payments = () => {
               />
             ))}
           </div>
-        )}
+        ) : null}
       </div>
     </TopNavbar>
   );

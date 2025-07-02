@@ -18,7 +18,9 @@ import {
   Video,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Edit,
+  HardDrive
 } from 'lucide-react';
 
 interface Event {
@@ -32,6 +34,8 @@ interface Event {
   balance_amount?: number;
   status: string;
   created_at: string;
+  storage_disk?: string;
+  storage_size?: number;
   client?: {
     name: string;
     phone: string;
@@ -42,6 +46,9 @@ interface Event {
   videographer?: {
     full_name: string;
   };
+  editor?: {
+    full_name: string;
+  };
 }
 
 const Events = () => {
@@ -49,7 +56,7 @@ const Events = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [events, setEvents] = useState<Event[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(false);
   const [showEventDialog, setShowEventDialog] = useState(false);
 
   useEffect(() => {
@@ -64,22 +71,36 @@ const Events = () => {
   }, [user, loading, profile, navigate]);
 
   const loadEvents = async () => {
+    if (!profile?.firm_id) {
+      console.log('No firm_id available, skipping events load');
+      return;
+    }
+
     try {
       setLoadingEvents(true);
+      console.log('Loading events for firm:', profile.firm_id);
+      
       const { data, error } = await supabase
         .from('events')
         .select(`
           *,
           client:clients(name, phone),
           photographer:profiles!events_photographer_id_fkey(full_name),
-          videographer:profiles!events_videographer_id_fkey(full_name)
+          videographer:profiles!events_videographer_id_fkey(full_name),
+          editor:profiles!events_editor_id_fkey(full_name)
         `)
-        .eq('firm_id', profile?.firm_id)
+        .eq('firm_id', profile.firm_id)
         .order('event_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading events:', error);
+        throw error;
+      }
+      
+      console.log('Loaded events:', data?.length);
       setEvents(data || []);
     } catch (error: any) {
+      console.error('Error in loadEvents:', error);
       toast({
         title: "Error loading events",
         description: error.message,
@@ -94,11 +115,10 @@ const Events = () => {
     const colors = {
       'Wedding': 'bg-red-100 text-red-800',
       'Pre-Wedding': 'bg-pink-100 text-pink-800',
-      'Engagement': 'bg-purple-100 text-purple-800',
       'Birthday': 'bg-yellow-100 text-yellow-800',
       'Corporate': 'bg-blue-100 text-blue-800',
-      'Fashion': 'bg-green-100 text-green-800',
-      'Portfolio': 'bg-indigo-100 text-indigo-800',
+      'Product': 'bg-green-100 text-green-800',
+      'Portrait': 'bg-indigo-100 text-indigo-800',
       'Other': 'bg-gray-100 text-gray-800'
     };
     return colors[eventType as keyof typeof colors] || colors.Other;
@@ -117,7 +137,18 @@ const Events = () => {
     }
   };
 
-  if (loading || loadingEvents) {
+  const getStorageDiskColor = (disk: string) => {
+    const colors = {
+      'Disk-A': 'bg-red-100 text-red-800',
+      'Disk-B': 'bg-blue-100 text-blue-800',
+      'Disk-C': 'bg-green-100 text-green-800',
+      'Disk-D': 'bg-yellow-100 text-yellow-800',
+      'Disk-E': 'bg-purple-100 text-purple-800',
+    };
+    return colors[disk as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  if (loading) {
     return (
       <TopNavbar>
         <div className="space-y-6">
@@ -145,6 +176,25 @@ const Events = () => {
     );
   }
 
+  if (!profile?.firm_id) {
+    return (
+      <TopNavbar>
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Calendar className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">No Firm Associated</h1>
+          <p className="text-muted-foreground mb-6">
+            You need to be associated with a firm to manage events. Please contact your administrator or create a firm.
+          </p>
+          <Button onClick={() => navigate('/dashboard')}>
+            Go to Dashboard
+          </Button>
+        </div>
+      </TopNavbar>
+    );
+  }
+
   return (
     <TopNavbar>
       <div className="space-y-6">
@@ -160,8 +210,25 @@ const Events = () => {
           </Button>
         </div>
 
+        {/* Loading State */}
+        {loadingEvents && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardContent className="p-6">
+                  <div className="space-y-3">
+                    <div className="h-6 bg-muted rounded w-3/4"></div>
+                    <div className="h-4 bg-muted rounded w-1/2"></div>
+                    <div className="h-4 bg-muted rounded w-2/3"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Events Grid */}
-        {events.length === 0 ? (
+        {!loadingEvents && events.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -178,7 +245,7 @@ const Events = () => {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        ) : !loadingEvents ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {events.map((event) => (
               <Card key={event.id} className="hover:shadow-md transition-shadow">
@@ -217,8 +284,30 @@ const Events = () => {
                     )}
                   </div>
 
+                  {/* Storage Information */}
+                  {(event.storage_disk || event.storage_size) && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">STORAGE INFO</p>
+                      <div className="flex flex-wrap gap-2">
+                        {event.storage_disk && (
+                          <div className="flex items-center space-x-1 text-xs px-2 py-1 rounded-full">
+                            <Badge className={getStorageDiskColor(event.storage_disk)}>
+                              <HardDrive className="h-3 w-3 mr-1" />
+                              {event.storage_disk}
+                            </Badge>
+                          </div>
+                        )}
+                        {event.storage_size && (
+                          <Badge variant="outline" className="text-xs">
+                            {event.storage_size} GB
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Staff Assignment */}
-                  {(event.photographer || event.videographer) && (
+                  {(event.photographer || event.videographer || event.editor) && (
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">ASSIGNED STAFF</p>
                       <div className="flex flex-wrap gap-2">
@@ -232,6 +321,12 @@ const Events = () => {
                           <div className="flex items-center space-x-1 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
                             <Video className="h-3 w-3" />
                             <span>{event.videographer.full_name}</span>
+                          </div>
+                        )}
+                        {event.editor && (
+                          <div className="flex items-center space-x-1 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                            <Edit className="h-3 w-3" />
+                            <span>{event.editor.full_name}</span>
                           </div>
                         )}
                       </div>
@@ -269,7 +364,7 @@ const Events = () => {
               </Card>
             ))}
           </div>
-        )}
+        ) : null}
 
         {/* Event Creation Dialog */}
         <EventFormDialog
