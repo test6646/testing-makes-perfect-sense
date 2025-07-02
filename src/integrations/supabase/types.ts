@@ -61,12 +61,15 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          editor_id: string | null
           event_date: string
           event_type: Database["public"]["Enums"]["event_type"]
           firm_id: string | null
           id: string
           photographer_id: string | null
           status: Database["public"]["Enums"]["event_status"]
+          storage_disk: string | null
+          storage_size: number | null
           title: string
           total_amount: number | null
           updated_at: string
@@ -80,12 +83,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          editor_id?: string | null
           event_date: string
           event_type: Database["public"]["Enums"]["event_type"]
           firm_id?: string | null
           id?: string
           photographer_id?: string | null
           status?: Database["public"]["Enums"]["event_status"]
+          storage_disk?: string | null
+          storage_size?: number | null
           title: string
           total_amount?: number | null
           updated_at?: string
@@ -99,12 +105,15 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          editor_id?: string | null
           event_date?: string
           event_type?: Database["public"]["Enums"]["event_type"]
           firm_id?: string | null
           id?: string
           photographer_id?: string | null
           status?: Database["public"]["Enums"]["event_status"]
+          storage_disk?: string | null
+          storage_size?: number | null
           title?: string
           total_amount?: number | null
           updated_at?: string
@@ -122,6 +131,13 @@ export type Database = {
           {
             foreignKeyName: "events_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_editor_id_fkey"
+            columns: ["editor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

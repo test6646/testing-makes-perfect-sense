@@ -9,7 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon } from 'lucide-react';
+import type { Database } from '@/integrations/supabase/types';
+
+type EventType = Database['public']['Enums']['event_type'];
 
 interface Client {
   id: string;
@@ -29,14 +31,13 @@ interface EventFormDialogProps {
   onEventCreated: () => void;
 }
 
-const EVENT_TYPES = [
+const EVENT_TYPES: { value: EventType; label: string; color: string }[] = [
   { value: 'Wedding', label: 'Wedding', color: 'bg-red-100 text-red-800' },
   { value: 'Pre-Wedding', label: 'Pre-Wedding', color: 'bg-pink-100 text-pink-800' },
-  { value: 'Engagement', label: 'Engagement', color: 'bg-purple-100 text-purple-800' },
   { value: 'Birthday', label: 'Birthday', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'Corporate', label: 'Corporate', color: 'bg-blue-100 text-blue-800' },
-  { value: 'Fashion', label: 'Fashion', color: 'bg-green-100 text-green-800' },
-  { value: 'Portfolio', label: 'Portfolio', color: 'bg-indigo-100 text-indigo-800' },
+  { value: 'Product', label: 'Product', color: 'bg-green-100 text-green-800' },
+  { value: 'Portrait', label: 'Portrait', color: 'bg-indigo-100 text-indigo-800' },
   { value: 'Other', label: 'Other', color: 'bg-gray-100 text-gray-800' }
 ];
 
@@ -61,7 +62,7 @@ const EventFormDialog = ({ open, onOpenChange, onEventCreated }: EventFormDialog
   const [formData, setFormData] = useState({
     title: '',
     client_id: '',
-    event_type: '',
+    event_type: '' as EventType | '',
     event_date: '',
     venue: '',
     description: '',
@@ -141,6 +142,7 @@ const EventFormDialog = ({ open, onOpenChange, onEventCreated }: EventFormDialog
       const totalAmount = parseFloat(formData.total_amount) || 0;
       const advanceAmount = parseFloat(formData.advance_amount) || 0;
       const balanceAmount = totalAmount - advanceAmount;
+      const storageSize = parseFloat(formData.storage_size) || null;
 
       const { data: event, error } = await supabase
         .from('events')
@@ -148,15 +150,18 @@ const EventFormDialog = ({ open, onOpenChange, onEventCreated }: EventFormDialog
           firm_id: profile?.firm_id,
           title: formData.title,
           client_id: formData.client_id,
-          event_type: formData.event_type,
+          event_type: formData.event_type as EventType,
           event_date: formData.event_date,
-          venue: formData.venue,
-          description: formData.description,
+          venue: formData.venue || null,
+          description: formData.description || null,
           total_amount: totalAmount,
           advance_amount: advanceAmount,
           balance_amount: balanceAmount,
           photographer_id: formData.photographer_id || null,
           videographer_id: formData.videographer_id || null,
+          editor_id: formData.editor_id || null,
+          storage_disk: formData.storage_disk || null,
+          storage_size: storageSize,
           created_by: profile?.id,
           status: 'Confirmed'
         })
@@ -267,7 +272,7 @@ const EventFormDialog = ({ open, onOpenChange, onEventCreated }: EventFormDialog
             {/* Event Type */}
             <div className="space-y-2">
               <Label htmlFor="event_type">Event Type *</Label>
-              <Select value={formData.event_type} onValueChange={(value) => setFormData({ ...formData, event_type: value })}>
+              <Select value={formData.event_type} onValueChange={(value) => setFormData({ ...formData, event_type: value as EventType })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select event type" />
                 </SelectTrigger>
@@ -367,6 +372,22 @@ const EventFormDialog = ({ open, onOpenChange, onEventCreated }: EventFormDialog
                   {videographers.map((videographer) => (
                     <SelectItem key={videographer.id} value={videographer.id}>
                       {videographer.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editor">Editor</Label>
+              <Select value={formData.editor_id} onValueChange={(value) => setFormData({ ...formData, editor_id: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select editor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {editors.map((editor) => (
+                    <SelectItem key={editor.id} value={editor.id}>
+                      {editor.full_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
