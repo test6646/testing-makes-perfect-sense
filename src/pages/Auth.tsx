@@ -94,16 +94,22 @@ const Auth = () => {
     try {
       // Verify admin PIN if admin role
       if (formData.role === 'Admin') {
+        console.log('Verifying admin PIN...');
         const { data: secretData, error: pinError } = await supabase.functions.invoke('verify-admin-pin', {
           body: { pin: formData.adminPin }
         });
         
+        console.log('Admin PIN verification result:', { secretData, pinError });
+        
         if (pinError || !secretData?.valid) {
+          console.error('Admin PIN verification failed:', pinError);
           setErrors({ adminPin: 'Invalid admin PIN. Please check and try again.' });
+          setIsLoading(false);
           return;
         }
       }
 
+      console.log('Starting user signup...');
       // Sign up user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -118,9 +124,18 @@ const Auth = () => {
         }
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Account creation failed. Please try again.');
+      console.log('Signup result:', { authData, authError });
 
+      if (authError) {
+        console.error('Auth signup error:', authError);
+        throw authError;
+      }
+      if (!authData.user) {
+        console.error('No user returned from signup');
+        throw new Error('Account creation failed. Please try again.');
+      }
+
+      console.log('Creating profile for user:', authData.user.id);
       // Create profile
       const { error: profileError } = await supabase.from('profiles').insert({
         user_id: authData.user.id,
@@ -130,8 +145,12 @@ const Auth = () => {
         firm_id: formData.role === 'Admin' ? null : formData.firmId
       });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        throw profileError;
+      }
 
+      console.log('Account creation successful, moving to verification step');
       // If admin, we'll handle firm creation after email verification
       setVerificationEmail(formData.email);
       setAuthStep('verification');
