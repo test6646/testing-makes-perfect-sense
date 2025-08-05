@@ -35,13 +35,30 @@ export const useWhatsAppSessionV2 = () => {
 
       if (!profile?.current_firm_id) throw new Error('No firm selected');
 
-      // Direct backend call for status
-      const response = await fetch(`https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/status/${profile.current_firm_id}`, {
-        headers: { 'Content-Type': 'application/json' }
+      // Use firm_id as session_id for backend
+      const sessionId = `firm_${profile.current_firm_id}_${Date.now()}`;
+
+      // Direct backend call for status with timeout and better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(`https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/status/${sessionId}`, {
+        method: 'GET',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error('Failed to get status');
+        if (response.status === 404) {
+          // Session not found, that's normal for new sessions
+          return setSession({ status: 'disconnected', message: 'Ready to connect', step: 1 });
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -84,22 +101,31 @@ export const useWhatsAppSessionV2 = () => {
 
       if (!profile?.current_firm_id) throw new Error('No firm selected');
 
-      // Generate session ID
+      // Generate session ID based on firm
       const sessionId = `firm_${profile.current_firm_id}_${Date.now()}`;
 
-      // Direct backend call for initialization
+      // Direct backend call for initialization with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for initialization
+
       const response = await fetch('https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/initialize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal,
         body: JSON.stringify({
           session_id: sessionId,
           firm_id: profile.current_firm_id
         })
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Initialization failed');
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
       }
 
       const data = await response.json();
@@ -117,8 +143,14 @@ export const useWhatsAppSessionV2 = () => {
       setTimeout(getStatus, 2000);
     } catch (error: any) {
       console.error('❌ Initialization failed:', error);
-      setSession({ status: 'error', message: error.message, step: 1 });
-      toast.error(`Initialization failed: ${error.message}`);
+      const errorMessage = error.name === 'AbortError' 
+        ? 'Request timeout. Backend might be starting up, please try again in a moment.'
+        : error.message.includes('Failed to fetch')
+        ? 'Cannot connect to WhatsApp backend. Please check your connection.'
+        : error.message;
+      
+      setSession({ status: 'error', message: errorMessage, step: 1 });
+      toast.error(`Initialization failed: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -164,10 +196,17 @@ export const useWhatsAppSessionV2 = () => {
     }
 
     try {
-      // Direct backend call for sending test message
+      // Direct backend call for sending test message with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
       const response = await fetch('https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/send-test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal,
         body: JSON.stringify({
           session_id: session.session_id,
           phone: '+919106403233',
@@ -175,9 +214,11 @@ export const useWhatsAppSessionV2 = () => {
         })
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send test message');
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to send test message'}`);
       }
 
       const data = await response.json();
