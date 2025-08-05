@@ -21,17 +21,30 @@ export const useWhatsAppSessionV2 = () => {
 
   // ✅ REMOVED QR EXPIRY HANDLER - NO MORE TIMEOUTS
 
-  // Get current session status
+  // Get current session status - directly from backend
   const getStatus = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-session-manager', {
-        body: { action: 'status' }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('current_firm_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.current_firm_id) throw new Error('No firm selected');
+
+      // Direct backend call for status
+      const response = await fetch(`https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/status/${profile.current_firm_id}`, {
+        headers: { 'Content-Type': 'application/json' }
       });
 
-      if (error) {
-        setSession({ status: 'error', message: error.message, step: 1 });
-        return;
+      if (!response.ok) {
+        throw new Error('Failed to get status');
       }
+
+      const data = await response.json();
 
       const newStep = data?.status === 'connected' ? 4 
                     : data?.status === 'qr_ready' ? (data?.qr_code ? 3 : 2)
@@ -47,68 +60,17 @@ export const useWhatsAppSessionV2 = () => {
         step: newStep
       });
     } catch (error: any) {
+      console.error('❌ Failed to get status:', error);
       setSession({ status: 'error', message: error.message, step: 1 });
     }
   }, []);
 
-  // Initialize WhatsApp session
+  // Initialize WhatsApp session - directly to backend
   const initialize = useCallback(async () => {
     if (isLoading) return;
     
     setIsLoading(true);
     setSession(prev => ({ ...prev, status: 'connecting', message: 'Initializing session...', step: 2 }));
-
-    try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-session-manager', {
-        body: { action: 'initialize' }
-      });
-
-      if (error || !data?.success) {
-        throw new Error(error?.message || data?.error || 'Initialization failed');
-      }
-
-      setSession({
-        status: 'connecting',
-        session_id: data.session_id,
-        message: 'Session initialized - waiting for QR code...',
-        step: 2
-      });
-
-      toast.success('Session initialized successfully!');
-    } catch (error: any) {
-      setSession({ status: 'error', message: error.message, step: 1 });
-      toast.error(`Initialization failed: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading]);
-
-  // Disconnect WhatsApp session
-  const disconnect = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-session-manager', {
-        body: { action: 'disconnect' }
-      });
-
-      if (error || !data?.success) {
-        throw new Error(error?.message || data?.error || 'Disconnect failed');
-      }
-
-      setSession({ status: 'disconnected', message: 'WhatsApp disconnected', step: 1 });
-      toast.success('WhatsApp disconnected successfully!');
-      return true;
-    } catch (error: any) {
-      toast.error(`Disconnect failed: ${error.message}`);
-      return false;
-    }
-  }, []);
-
-  // Send test message
-  const sendTestMessage = useCallback(async () => {
-    if (session.status !== 'connected') {
-      toast.error('WhatsApp not connected');
-      return false;
-    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -122,23 +84,113 @@ export const useWhatsAppSessionV2 = () => {
 
       if (!profile?.current_firm_id) throw new Error('No firm selected');
 
-      const { error } = await supabase.functions.invoke('whatsapp-simple-messaging', {
-        body: {
-          firmId: profile.current_firm_id,
-          phone: '+919106403233',
-          message: 'Test message from WhatsApp integration!'
-        }
+      // Generate session ID
+      const sessionId = `firm_${profile.current_firm_id}_${Date.now()}`;
+
+      // Direct backend call for initialization
+      const response = await fetch('https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          firm_id: profile.current_firm_id
+        })
       });
 
-      if (error) throw new Error(error.message);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Initialization failed');
+      }
+
+      const data = await response.json();
+
+      setSession({
+        status: 'connecting',
+        session_id: data.session_id,
+        message: 'Session initialized - waiting for QR code...',
+        step: 2
+      });
+
+      toast.success('Session initialized successfully!');
       
-      toast.success('Test message sent!');
+      // Start polling for status updates
+      setTimeout(getStatus, 2000);
+    } catch (error: any) {
+      console.error('❌ Initialization failed:', error);
+      setSession({ status: 'error', message: error.message, step: 1 });
+      toast.error(`Initialization failed: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading, getStatus]);
+
+  // Disconnect WhatsApp session - directly to backend
+  const disconnect = useCallback(async () => {
+    try {
+      if (!session.session_id) throw new Error('No active session to disconnect');
+
+      // Direct backend call for disconnect
+      const response = await fetch('https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: session.session_id })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Disconnect failed');
+      }
+
+      setSession({ status: 'disconnected', message: 'WhatsApp disconnected', step: 1 });
+      toast.success('WhatsApp disconnected successfully!');
       return true;
     } catch (error: any) {
-      toast.error(`Failed: ${error.message}`);
+      console.error('❌ Disconnect failed:', error);
+      toast.error(`Disconnect failed: ${error.message}`);
       return false;
     }
-  }, [session.status]);
+  }, [session.session_id]);
+
+  // Send test message - directly to backend
+  const sendTestMessage = useCallback(async () => {
+    if (session.status !== 'connected') {
+      toast.error('WhatsApp not connected');
+      return false;
+    }
+
+    if (!session.session_id) {
+      toast.error('No active session');
+      return false;
+    }
+
+    try {
+      // Direct backend call for sending test message
+      const response = await fetch('https://whatsapp-backend-fcx5.onrender.com/api/whatsapp/send-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: session.session_id,
+          phone: '+919106403233',
+          message: 'Test message from WhatsApp integration!'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send test message');
+      }
+
+      const data = await response.json();
+      console.log('✅ Test message sent:', data);
+      
+      toast.success('Test message sent successfully!');
+      return true;
+    } catch (error: any) {
+      console.error('❌ Failed to send test message:', error);
+      toast.error(`Failed to send test message: ${error.message}`);
+      return false;
+    }
+  }, [session.status, session.session_id]);
 
   // Helper function for status messages
   const getStatusMessage = (status: string) => {
@@ -158,92 +210,34 @@ export const useWhatsAppSessionV2 = () => {
     }
   };
 
-  // Real-time subscription for session updates
+  // Periodic status checks instead of real-time subscriptions
   useEffect(() => {
     let isMounted = true;
+    let pollInterval: NodeJS.Timeout;
     
     // Get initial status
     getStatus();
 
-    // Subscribe to real-time database updates ONLY
-    const channel = supabase
-      .channel('whatsapp-session-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'whatsapp_sessions'
-        },
-        (payload) => {
-          if (!isMounted) return; // Prevent updates if component unmounted
-          
-          console.log('📱 Real-time WhatsApp update:', payload);
-          
-          // Handle DELETE events (session removed)
-          if (payload.eventType === 'DELETE') {
-            setSession(prev => ({
-              ...prev,
-              status: 'disconnected',
-              qr_code: undefined,
-              session_id: undefined,
-              connected_at: undefined,
-              message: getStatusMessage('disconnected'),
-              step: 1
-            }));
-            return;
+    // Poll for status updates when needed
+    const startPolling = () => {
+      if (session.status === 'connecting' || session.status === 'qr_ready') {
+        pollInterval = setInterval(() => {
+          if (isMounted) {
+            getStatus();
           }
-          
-          // Handle INSERT/UPDATE events
-          if (payload.new && typeof payload.new === 'object') {
-            const sessionData = payload.new as Record<string, any>;
-            const newStatus = sessionData.status || 'disconnected';
-            
-            const newStep = newStatus === 'connected' ? 4 
-                          : newStatus === 'qr_ready' ? (sessionData.qr_code ? 3 : 2)
-                          : newStatus === 'connecting' ? 2
-                          : 1;
-            
-            setSession(prev => {
-              // Only update if status actually changed to prevent flickering
-              if (prev.status === newStatus && prev.qr_code === sessionData.qr_code) {
-                return prev;
-              }
-              
-              const updatedSession: WhatsAppSessionState = {
-                status: newStatus,
-                session_id: sessionData.session_id,
-                qr_code: sessionData.qr_code,
-                connected_at: sessionData.connected_at,
-                message: getStatusMessage(newStatus),
-                step: newStep as 1 | 2 | 3 | 4
-              };
-              
-              // Status-specific notifications
-              if (newStatus === 'connected' && prev.status !== 'connected') {
-                toast.success('🎉 WhatsApp connected successfully!');
-              } else if (newStatus === 'qr_ready' && prev.status !== 'qr_ready') {
-                toast.info('📱 QR Code ready! Scan with WhatsApp');
-              } else if (newStatus === 'connecting' && prev.status !== 'connecting') {
-                toast.info('🔄 Initializing WhatsApp session...');
-              } else if (newStatus === 'disconnected' && prev.status === 'connected') {
-                toast.warning('📱 WhatsApp disconnected');
-              } else if (newStatus === 'error') {
-                toast.error(`❌ Connection error: ${sessionData.message || 'Unknown error'}`);
-              }
-              
-              return updatedSession;
-            });
-          }
-        }
-      )
-      .subscribe();
+        }, 3000); // Poll every 3 seconds when actively connecting
+      }
+    };
+
+    startPolling();
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(channel);
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
     };
-  }, [getStatus]); // Add getStatus as dependency
+  }, [getStatus, session.status]);
 
   return {
     session,
