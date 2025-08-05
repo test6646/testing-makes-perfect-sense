@@ -1,265 +1,471 @@
 
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const cors = require('cors');
-const path = require('path');
-require('dotenv').config();
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const qrcode = require('qrcode');
 
-// SECURITY: Remove hardcoded keys - use environment variables only
-
-const WhatsAppService = require('./services/WhatsAppService');
-
-const app = express();
-const server = http.createServer(app);
-
-// CORS configuration - Environment-based origins
-const getAllowedOrigins = () => {
-  const baseOrigins = [
-    "http://localhost:8080",
-    "http://localhost:3000"
-  ];
-  
-  // Add environment-specific origins
-  if (process.env.FRONTEND_URL) {
-    baseOrigins.push(process.env.FRONTEND_URL);
+class WhatsAppService {
+  constructor(io) {
+    this.io = io;
+    this.sessions = new Map();
+    this.clients = new Map();
+    this.sessionSockets = new Map(); // Track sockets per session
   }
-  
-  // Add Lovable deployment domains
-  if (process.env.NODE_ENV === 'production') {
-    baseOrigins.push(
-      "https://lovable.app",
-      "https://*.lovable.app"
-    );
-  } else {
-    // Allow all origins in development
-    baseOrigins.push("*");
+
+  // Add socket to session tracking
+  addSocketToSession(sessionId, socket) {
+    if (!this.sessionSockets.has(sessionId)) {
+      this.sessionSockets.set(sessionId, new Set());
+    }
+    this.sessionSockets.get(sessionId).add(socket);
+    console.log(`👤 Socket ${socket.id} joined session: ${sessionId}`);
   }
-  
-  return baseOrigins;
-};
 
-const corsOptions = {
-  origin: getAllowedOrigins(),
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
-};
-
-app.use(cors(corsOptions));
-
-// Add explicit CORS headers middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
+  // Remove socket from all sessions
+  removeSocket(socket) {
+    for (const [sessionId, sockets] of this.sessionSockets.entries()) {
+      if (sockets.has(socket)) {
+        sockets.delete(socket);
+        console.log(`👤 Socket ${socket.id} left session: ${sessionId}`);
+        if (sockets.size === 0) {
+          this.sessionSockets.delete(sessionId);
+        }
+      }
+    }
   }
-});
 
-app.use(express.json());
-
-// Socket.IO with CORS
-const io = socketIo(server, {
-  cors: corsOptions,
-  transports: ['websocket', 'polling']
-});
-
-// Initialize WhatsApp service
-const whatsappService = new WhatsAppService(io);
-
-// Set up session cleanup interval
-setInterval(() => {
-  whatsappService.cleanupSessions();
-}, 5 * 60 * 1000); // Every 5 minutes
-
-// Health check endpoint - lightweight and fast
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    service: 'WhatsApp Backend Ready'
-  });
-});
-
-// Initialize WhatsApp session
-app.post('/api/whatsapp/initialize', async (req, res) => {
-  try {
-    console.log('🚀 Initializing WhatsApp session...');
-    const { session_id, firm_id } = req.body;
-    
-    // CRITICAL FIX: Use the exact session_id from Supabase
-    if (!session_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'session_id is required'
+  // Emit to all sockets in a session
+  emitToSession(sessionId, event, data) {
+    const sockets = this.sessionSockets.get(sessionId);
+    if (sockets) {
+      console.log(`📡 Emitting ${event} to ${sockets.size} sockets for session: ${sessionId}`);
+      sockets.forEach(socket => {
+        socket.emit(event, { ...data, session_id: sessionId });
       });
     }
-    
-    console.log(`📥 Received session request: ${session_id} for firm: ${firm_id}`);
-    
-    const sessionId = await whatsappService.initializeSession(session_id);
-    
-    // CRITICAL: Ensure we return the SAME session_id that was passed in
-    res.json({
-      success: true,
-      session_id: session_id, // Return the original session_id, not the generated one
-      message: 'Session initialized successfully'
-    });
-  } catch (error) {
-    console.error('❌ Error initializing WhatsApp session:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
   }
-});
 
-// Get session status
-app.get('/api/whatsapp/status/:sessionId', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const status = await whatsappService.getSessionStatus(sessionId);
-    res.json(status);
-  } catch (error) {
-    console.error('❌ Error getting session status:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
+  async initializeSession(sessionId) {
+    try {
+      console.log(`🚀 Initializing WhatsApp session: ${sessionId}`);
 
-// Send test message
-app.post('/api/whatsapp/send-test', async (req, res) => {
-  try {
-    const { session_id, phone, message } = req.body;
-    if (!session_id || !phone || !message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: session_id, phone, message'
+      // Clean up existing session if any
+      if (this.clients.has(sessionId)) {
+        await this.disconnectSession(sessionId);
+      }
+
+      // Create new client instance
+      const client = new Client({
+        authStrategy: new LocalAuth({ clientId: sessionId }),
+        puppeteer: {
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+          ]
+        }
       });
-    }
-    console.log(`📤 Sending test message to ${phone}...`);
-    const result = await whatsappService.sendMessage(session_id, phone, message);
 
-    res.json({
-      success: true,
-      message: 'Test message sent successfully',
-      result
-    });
-  } catch (error) {
-    console.error('❌ Error sending test message:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
+      // Set up event handlers BEFORE initializing
+      this.setupClientEvents(client, sessionId);
 
-// Send message endpoint (for edge function)
-app.post('/send-message', async (req, res) => {
-  try {
-    const { session_id, phone, message } = req.body;
-    if (!session_id || !phone || !message) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: session_id, phone, message'
+      // Store client and initialize
+      this.clients.set(sessionId, client);
+      this.sessions.set(sessionId, {
+        status: 'connecting',
+        created_at: new Date().toISOString(),
+        last_update: new Date().toISOString(),
+        qr_retries: 0,
+        connection_attempts: 0
       });
+
+      // Emit initial connecting state
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'connecting',
+        ready: false,
+        qr_available: false,
+        message: 'Initializing WhatsApp client...'
+      });
+
+      // Initialize client
+      await client.initialize();
+      
+      return sessionId;
+    } catch (error) {
+      console.error(`❌ Error initializing session ${sessionId}:`, error);
+      
+      // Update session state and emit error
+      if (this.sessions.has(sessionId)) {
+        this.sessions.get(sessionId).status = 'error';
+        this.sessions.get(sessionId).last_update = new Date().toISOString();
+      }
+
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'error',
+        ready: false,
+        qr_available: false,
+        message: error.message
+      });
+
+      throw error;
     }
-    console.log(`📤 Sending message to ${phone} via session ${session_id}...`);
-    const result = await whatsappService.sendMessage(session_id, phone, message);
+  }
 
-    res.json({
-      success: true,
-      message: 'Message sent successfully',
-      result
+  setupClientEvents(client, sessionId) {
+    console.log(`⚡ Setting up events for session: ${sessionId}`);
+
+    client.on('qr', async (qr) => {
+      try {
+        console.log(`📱 QR Code generated for session: ${sessionId}`);
+        
+        const qrCodeDataURL = await qrcode.toDataURL(qr, { width: 300, margin: 2 });
+        
+        // Update session state
+        const session = this.sessions.get(sessionId);
+        if (session) {
+          session.status = 'qr_ready';
+          session.qr_code = qrCodeDataURL;
+          session.last_update = new Date().toISOString();
+          session.qr_retries = (session.qr_retries || 0) + 1;
+        }
+
+        // Emit QR ready status immediately
+        this.emitToSession(sessionId, 'whatsapp_status', {
+          status: 'qr_ready',
+          ready: false,
+          qr_available: true,
+          qr_code: qrCodeDataURL,
+          message: 'QR Code ready - scan to connect'
+        });
+
+        // Also emit specific qr_code event for backward compatibility
+        this.emitToSession(sessionId, 'qr_code', {
+          qr: qrCodeDataURL,
+          qr_code: qrCodeDataURL
+        });
+
+      } catch (error) {
+        console.error(`❌ QR Code generation error for ${sessionId}:`, error);
+        this.emitToSession(sessionId, 'whatsapp_status', {
+          status: 'error',
+          ready: false,
+          qr_available: false,
+          message: 'QR Code generation failed'
+        });
+      }
     });
-  } catch (error) {
-    console.error('❌ Error sending message:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
+
+    client.on('ready', () => {
+      console.log(`✅ WhatsApp client ready for session: ${sessionId}`);
+      
+      // Update session state
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        session.status = 'connected';
+        session.connected_at = new Date().toISOString();
+        session.last_update = new Date().toISOString();
+        session.qr_code = null; // Clear QR code when connected
+      }
+
+      // Emit connected status immediately
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'connected',
+        ready: true,
+        qr_available: false,
+        connected_at: new Date().toISOString(),
+        message: 'WhatsApp connected successfully'
+      });
+
+      // Also emit specific connection_success event
+      this.emitToSession(sessionId, 'connection_success', {
+        message: 'WhatsApp connected successfully',
+        connected_at: new Date().toISOString()
+      });
+    });
+
+    client.on('authenticated', () => {
+      console.log(`🔐 WhatsApp authenticated for session: ${sessionId}`);
+      
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'authenticated',
+        ready: false,
+        qr_available: false,
+        message: 'Authentication successful'
+      });
+    });
+
+    client.on('auth_failure', (message) => {
+      console.error(`❌ WhatsApp auth failure for session ${sessionId}:`, message);
+      
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        session.status = 'error';
+        session.last_update = new Date().toISOString();
+      }
+
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'error',
+        ready: false,
+        qr_available: false,
+        message: 'Authentication failed'
+      });
+
+      this.emitToSession(sessionId, 'connection_error', {
+        message: 'Authentication failed',
+        error: message
+      });
+    });
+
+    client.on('disconnected', (reason) => {
+      console.log(`🔌 WhatsApp disconnected for session ${sessionId}:`, reason);
+      
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        session.status = 'disconnected';
+        session.last_update = new Date().toISOString();
+        session.qr_code = null;
+      }
+
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'disconnected',
+        ready: false,
+        qr_available: false,
+        message: 'WhatsApp disconnected'
+      });
+
+      this.emitToSession(sessionId, 'disconnected', {
+        reason: reason,
+        message: 'WhatsApp disconnected'
+      });
+
+      // Clean up client
+      this.clients.delete(sessionId);
+    });
+
+    client.on('loading_screen', (percent, message) => {
+      console.log(`⏳ Loading screen for ${sessionId}: ${percent}% - ${message}`);
+      
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'connecting',
+        ready: false,
+        qr_available: false,
+        message: `Loading: ${percent}% - ${message}`
+      });
     });
   }
-});
 
-// Disconnect session
-app.post('/api/whatsapp/disconnect', async (req, res) => {
-  try {
-    const { session_id } = req.body;
-    await whatsappService.disconnectSession(session_id);
-    res.json({
-      success: true,
-      message: 'Session disconnected successfully'
-    });
-  } catch (error) {
-    console.error('❌ Error disconnecting session:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+  async getSessionStatus(sessionId) {
+    let session = this.sessions.get(sessionId);
+    let client = this.clients.get(sessionId);
+    
+    // 🔥 CRITICAL FIX: Try to restore existing WhatsApp session if not in memory
+    if (!session || !client) {
+      console.log(`🔄 Session ${sessionId} not in memory, checking for existing auth...`);
+      
+      try {
+        // Create a client to check if there's existing auth
+        const testClient = new Client({
+          authStrategy: new LocalAuth({ clientId: sessionId }),
+          puppeteer: { headless: true, args: ['--no-sandbox'] }
+        });
+        
+        // Don't initialize, just check if auth exists
+        const authExists = await new Promise((resolve) => {
+          testClient.on('authenticated', () => {
+            console.log(`✅ Found existing auth for session: ${sessionId}`);
+            resolve(true);
+          });
+          
+          testClient.on('qr', () => {
+            console.log(`📱 No existing auth for session: ${sessionId}`);
+            resolve(false);
+          });
+          
+          testClient.on('auth_failure', () => {
+            console.log(`❌ Auth failed for session: ${sessionId}`);
+            resolve(false);
+          });
+          
+          // Initialize to trigger auth check
+          testClient.initialize().catch(() => resolve(false));
+          
+          // Timeout after 5 seconds
+          setTimeout(() => resolve(false), 5000);
+        });
+        
+        // Clean up test client
+        try {
+          await testClient.destroy();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        
+        if (authExists) {
+          // Restore the session
+          console.log(`🔄 Restoring authenticated session: ${sessionId}`);
+          await this.initializeSession(sessionId);
+          session = this.sessions.get(sessionId);
+          client = this.clients.get(sessionId);
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error checking session auth:`, error);
+      }
+    }
+    
+    if (!session) {
+      return {
+        status: 'not_found',
+        ready: false,
+        qr_available: false,
+        message: 'Session not found'
+      };
+    }
+
+    const connectedSockets = this.sessionSockets.get(sessionId)?.size || 0;
+    
+    return {
+      status: session.status,
+      ready: session.status === 'connected',
+      qr_available: session.status === 'qr_ready' && !!session.qr_code,
+      qr_code: session.qr_code,
+      created_at: session.created_at,
+      connected_at: session.connected_at,
+      last_update: session.last_update,
+      qr_retries: session.qr_retries || 0,
+      connection_attempts: session.connection_attempts || 0,
+      connected_sockets: connectedSockets,
+      message: this.getStatusMessage(session.status)
+    };
   }
-});
 
-// Disconnect session by ID (alternative endpoint)
-app.post('/api/whatsapp/disconnect/:sessionId', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    await whatsappService.disconnectSession(sessionId);
-    res.json({
-      success: true,
-      message: 'Session disconnected successfully'
-    });
-  } catch (error) {
-    console.error('❌ Error disconnecting session:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+  getStatusMessage(status) {
+    switch (status) {
+      case 'connecting': return 'Initializing WhatsApp connection...';
+      case 'qr_ready': return 'QR Code ready - scan to connect';
+      case 'connected': return 'WhatsApp connected and ready';
+      case 'authenticated': return 'Authentication successful';
+      case 'error': return 'Connection error occurred';
+      case 'disconnected': return 'WhatsApp disconnected';
+      default: return 'Unknown status';
+    }
   }
-});
 
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
+  async sendMessage(sessionId, phone, message) {
+    let client = this.clients.get(sessionId);
+    let session = this.sessions.get(sessionId);
+    
+    // 🔥 CRITICAL FIX: If session not found, try to restore/reinitialize
+    if (!client || !session) {
+      console.log(`🔄 Session ${sessionId} not found in memory, attempting to restore...`);
+      
+      // Check if this is a valid session that should exist
+      // For now, try to reinitialize it
+      try {
+        await this.initializeSession(sessionId);
+        client = this.clients.get(sessionId);
+        session = this.sessions.get(sessionId);
+        
+        // Wait a moment for connection to establish
+        if (session && session.status === 'connecting') {
+          console.log('⏳ Waiting for session to connect...');
+          // Return a more helpful error for now
+          throw new Error('Session is reconnecting. Please try again in a few moments.');
+        }
+      } catch (initError) {
+        console.error(`❌ Failed to restore session ${sessionId}:`, initError);
+        throw new Error('Session expired or invalid. Please reconnect WhatsApp.');
+      }
+    }
+    
+    if (!client) {
+      throw new Error('Session not found or expired. Please reconnect WhatsApp.');
+    }
+    
+    if (!session || session.status !== 'connected') {
+      throw new Error(`WhatsApp not connected (status: ${session?.status || 'unknown'}). Please reconnect.`);
+    }
+    
+    try {
+      const chatId = phone.includes('@') ? phone : `${phone}@c.us`;
+      const result = await client.sendMessage(chatId, message);
+      
+      console.log(`📤 Message sent successfully to ${phone} via session ${sessionId}`);
+      return {
+        success: true,
+        message: 'Message sent successfully',
+        result: {
+          key: {
+            remoteJid: result.to,
+            fromMe: result.fromMe,
+            id: result.id._serialized
+          },
+          message: {
+            extendedTextMessage: { text: message }
+          },
+          messageTimestamp: Math.floor(Date.now() / 1000).toString(),
+          status: 'PENDING'
+        }
+      };
+    } catch (error) {
+      console.error(`❌ Failed to send message via session ${sessionId}:`, error);
+      throw error;
+    }
+  }
 
-  socket.on('join-session', (sessionId) => {
-    console.log(`👤 Client ${socket.id} joined session: ${sessionId}`);
-    socket.join(sessionId);
-    whatsappService.addSocketToSession(sessionId, socket);
-  });
+  async disconnectSession(sessionId) {
+    try {
+      const client = this.clients.get(sessionId);
+      
+      if (client) {
+        await client.destroy();
+        this.clients.delete(sessionId);
+      }
+      
+      // Update session status
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        session.status = 'disconnected';
+        session.last_update = new Date().toISOString();
+        session.qr_code = null;
+      }
 
-  socket.on('disconnect', () => {
-    console.log(`🔌 Client disconnected: ${socket.id}`);
-    whatsappService.removeSocket(socket);
-  });
-});
+      // Emit disconnected status
+      this.emitToSession(sessionId, 'whatsapp_status', {
+        status: 'disconnected',
+        ready: false,
+        qr_available: false,
+        message: 'Session disconnected'
+      });
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-  console.error('🚨 Unhandled error:', error);
-  res.status(500).json({
-    success: false,
-    error: 'Internal server error'
-  });
-});
+      // Clean up socket tracking
+      this.sessionSockets.delete(sessionId);
+      
+      console.log(`🔌 Session ${sessionId} disconnected and cleaned up`);
+    } catch (error) {
+      console.error(`❌ Error disconnecting session ${sessionId}:`, error);
+      throw error;
+    }
+  }
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Endpoint not found'
-  });
-});
+  cleanupSessions() {
+    const now = Date.now();
+    const maxAge = 30 * 60 * 1000; // 30 minutes
+    
+    for (const [sessionId, session] of this.sessions.entries()) {
+      const lastUpdate = new Date(session.last_update).getTime();
+      
+      if (now - lastUpdate > maxAge) {
+        console.log(`🧹 Cleaning up old session: ${sessionId}`);
+        this.disconnectSession(sessionId);
+        this.sessions.delete(sessionId);
+      }
+    }
+  }
+}
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  console.log(`🚀 WhatsApp Backend Server running on port ${PORT}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
-  console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'Not configured'}`);
-});
+module.exports = WhatsAppService;
