@@ -289,8 +289,7 @@ export const ExpenseFormDialog = ({ open, onOpenChange, onExpenseCreated, expens
       
       onExpenseCreated?.(result);
       onOpenChange(false);
-      // Defer reset to prevent scroll jump
-      setTimeout(() => form.reset(), 0);
+      form.reset();
 
     } catch (error: any) {
       toast({
@@ -525,9 +524,8 @@ export const ExpenseFormDialog = ({ open, onOpenChange, onExpenseCreated, expens
             
             <DialogFooter className="flex flex-row gap-3">
               <Button type="button" variant="outline" onClick={() => {
-                // Defer reset to prevent scroll jump
                 onOpenChange(false);
-                setTimeout(() => form.reset(), 0);
+                form.reset();
               }} className="flex-1">
                 Cancel
               </Button>

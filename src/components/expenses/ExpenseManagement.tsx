@@ -323,8 +323,7 @@ const ExpenseManagement = () => {
         onOpenChange={(open) => {
           setEditDialogOpen(open);
           if (!open) {
-            // Defer state reset to prevent scroll jump
-            setTimeout(() => setEditingExpense(null), 0);
+            setEditingExpense(null);
           }
         }}
         onExpenseCreated={handleExpenseUpdated}

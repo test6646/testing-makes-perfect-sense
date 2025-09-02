@@ -48,10 +48,7 @@ const TaskManagementCore = () => {
   const handleTaskSuccess = async () => {
     await loadTasks();
     setIsDialogOpen(false);
-    // Defer state reset to prevent scroll jump
-    setTimeout(() => {
-      setEditingTask(null);
-    }, 0);
+    setEditingTask(null);
   };
 
   const handleEdit = (task: Task) => {
@@ -157,8 +154,7 @@ const TaskManagementCore = () => {
           onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) {
-              // Defer state reset to prevent scroll jump
-              setTimeout(() => setEditingTask(null), 0);
+              setEditingTask(null);
             }
           }}
           onSuccess={handleTaskSuccess}

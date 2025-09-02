@@ -91,8 +91,7 @@ const FreelancerFormDialog: React.FC<FreelancerFormDialogProps> = ({
     try {
       await onSubmit(data);
       onOpenChange(false);
-      // Defer reset to prevent scroll jump
-      setTimeout(() => form.reset(), 0);
+      form.reset();
     } catch (error) {
       // Error is handled in the parent component
     } finally {
@@ -210,9 +209,8 @@ const FreelancerFormDialog: React.FC<FreelancerFormDialogProps> = ({
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  // Defer reset to prevent scroll jump
                   onOpenChange(false);
-                  setTimeout(() => form.reset(), 0);
+                  form.reset();
                 }}
                 disabled={isSubmitting}
                 className="flex-1"

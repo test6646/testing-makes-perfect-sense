@@ -222,10 +222,7 @@ const EventManagementWithPayments = () => {
 
   const handleCloseEditDialog = () => {
     setEditDialogOpen(false);
-    // Don't clear editing event immediately to prevent race conditions
-    setTimeout(() => {
-      setEditingEvent(null);
-    }, 300);
+    setEditingEvent(null);
   };
 
   const handlePaymentRecord = (event: Event) => {

@@ -173,8 +173,7 @@ const FreelancerManagement: React.FC = () => {
         onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {
-            // Defer state reset to prevent scroll jump
-            setTimeout(() => setSelectedFreelancer(null), 0);
+            setSelectedFreelancer(null);
           }
         }}
         freelancer={selectedFreelancer}

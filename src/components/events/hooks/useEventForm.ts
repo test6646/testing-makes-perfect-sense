@@ -62,13 +62,10 @@ export const useEventForm = (
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
-      const timer = setTimeout(() => {
-        resetForm();
-        setSelectedQuotation(null);
-        setExistingQuotation(null);
-        setIsEventFromQuotation(false);
-      }, 200);
-      return () => clearTimeout(timer);
+      resetForm();
+      setSelectedQuotation(null);
+      setExistingQuotation(null);
+      setIsEventFromQuotation(false);
     }
   }, [open]);
 
