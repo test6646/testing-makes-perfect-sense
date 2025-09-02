@@ -142,7 +142,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
 
   const handleOpenChange = (open: boolean) => {
     onOpenChange(open);
-    if (!open) resetForm();
+    // Don't reset form here to prevent scroll jump - parent handles reset
   };
 
   return (
