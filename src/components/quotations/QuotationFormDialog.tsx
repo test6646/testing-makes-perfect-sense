@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,13 +93,16 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
   };
 
 
+  // Memoize event date time to prevent unnecessary re-renders
+  const eventDateTime = useMemo(() => formData.event_date?.getTime(), [formData.event_date]);
+
   // Auto-set expiry date when event date changes (only when not editing)
   useEffect(() => {
     if (formData.event_date && !editingQuotation) {
       const defaultExpiry = calculateDefaultExpiry(formData.event_date);
       setFormData(prev => ({ ...prev, valid_until: defaultExpiry }));
     }
-  }, [formData.event_date?.getTime(), editingQuotation]);
+  }, [eventDateTime, editingQuotation]);
 
   // Validate event date (must be future date)
   const isValidEventDate = (date: Date | undefined) => {
@@ -110,7 +113,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
   };
 
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate event date
@@ -125,7 +128,47 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
     
     onSubmit(formData);
     // Don't reset here - parent handles reset to prevent scroll jump
-  };
+  }, [formData, onSubmit]);
+
+  // Memoize client options to prevent re-creation
+  const clientOptions = useMemo(() => 
+    clients.map(client => ({
+      value: client.id,
+      label: client.name
+    })), [clients]);
+
+  // Memoize field change handlers
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, title: e.target.value }));
+  }, []);
+
+  const handleClientChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, client_id: value }));
+  }, []);
+
+  const handleEventTypeChange = useCallback((value: EventType) => {
+    setFormData(prev => ({ ...prev, event_type: value }));
+  }, []);
+
+  const handleEventDateChange = useCallback((date: Date | undefined) => {
+    setFormData(prev => ({ ...prev, event_date: date }));
+  }, []);
+
+  const handleVenueChange = useCallback((value: string) => {
+    setFormData(prev => ({ ...prev, venue: value }));
+  }, []);
+
+  const handleValidUntilChange = useCallback((date: Date | undefined) => {
+    setFormData(prev => ({ ...prev, valid_until: date }));
+  }, []);
+
+  const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setFormData(prev => ({ ...prev, description: e.target.value }));
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    onOpenChange(false);
+  }, [onOpenChange]);
 
 
   return (
@@ -147,7 +190,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
                 id="title"
                 placeholder="Enter quotation title"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={handleTitleChange}
                 required
               />
             </div>
@@ -155,11 +198,8 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
               <Label htmlFor="client">Client *</Label>
               <SearchableSelect
                 value={formData.client_id}
-                onValueChange={(value) => setFormData({ ...formData, client_id: value })}
-                options={clients.map(client => ({
-                  value: client.id,
-                  label: client.name
-                }))}
+                onValueChange={handleClientChange}
+                options={clientOptions}
                 placeholder="Select a client"
                 searchPlaceholder="Search clients..."
               />
@@ -171,7 +211,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
               <Label htmlFor="event_type">Event Type *</Label>
               <Select
                 value={formData.event_type}
-                onValueChange={(value: EventType) => setFormData({ ...formData, event_type: value })}
+                onValueChange={handleEventTypeChange}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -189,9 +229,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
               <Label htmlFor="event_date">Event Date *</Label>
               <div className="h-10">
                 <InlineDatePicker
-                  onSelect={(date) => {
-                    setFormData({ ...formData, event_date: date });
-                  }}
+                  onSelect={handleEventDateChange}
                   value={formData.event_date}
                   placeholder="DD/MM/YYYY"
                 />
@@ -207,7 +245,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
                 <Label htmlFor="venue">Venue</Label>
                 <VenueDropdownSelect
                   value={formData.venue}
-                  onValueChange={(value) => setFormData({ ...formData, venue: value })}
+                  onValueChange={handleVenueChange}
                   placeholder="Select or add venue..."
                 />
               </div>
@@ -215,7 +253,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
               <Label htmlFor="valid_until">Valid Until</Label>
               <div className="h-10">
                 <InlineDatePicker
-                  onSelect={(date) => setFormData({ ...formData, valid_until: date })}
+                  onSelect={handleValidUntilChange}
                   value={formData.valid_until}
                   placeholder="DD/MM/YYYY"
                 />
@@ -229,7 +267,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
               id="description"
               placeholder="Enter quotation description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={handleDescriptionChange}
               rows={3}
             />
           </div>
@@ -237,7 +275,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => onOpenChange(false)}
+              onClick={handleCancel}
               className="rounded-full"
             >
               Cancel

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { 
   ContactIcon, 
   Calendar01Icon, 
@@ -47,9 +47,10 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
-  const isExpired = (validUntil: string | null) => {
-    if (!validUntil) return false;
-    const expiryDate = new Date(validUntil);
+  // Memoize expiry check to prevent recalculation
+  const isExpired = useMemo(() => {
+    if (!quotation.valid_until) return false;
+    const expiryDate = new Date(quotation.valid_until);
     const today = new Date();
     
     // Set both dates to midnight for date-only comparison
@@ -57,9 +58,9 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
     today.setHours(0, 0, 0, 0);
     
     return expiryDate < today;
-  };
+  }, [quotation.valid_until]);
 
-  const generatePDF = async () => {
+  const generatePDF = useCallback(async () => {
     setIsDownloading(true);
     try {
       const result = await downloadQuotationPDF(quotation);
@@ -80,13 +81,13 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
     } finally {
       setIsDownloading(false);
     }
-  };
+  }, [quotation, toast]);
 
-  const handleShare = (quotation: any) => {
+  const handleShare = useCallback((quotation: any) => {
     setSelectedQuotationForShare(quotation);
     setShareDialogOpen(true);
     setIsSharing(true);
-  };
+  }, []);
 
   const handleDirectToClient = async () => {
     if (!selectedQuotationForShare) return;
@@ -165,7 +166,8 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
   const hasDiscount = quotation.discount_type && quotation.discount_value && quotation.discount_value > 0;
   const discountedAmount = hasDiscount ? originalAmount - (quotation.discount_amount || 0) : originalAmount;
 
-  const getEventTypeIcon = (eventType: string) => {
+  // Memoize event type icon and styling
+  const eventTypeInfo = useMemo(() => {
     const iconConfig = {
       'Wedding': <FavouriteIcon className="h-4 w-4" />,
       'Pre-Wedding': <MountainIcon className="h-4 w-4" />,
@@ -177,10 +179,7 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
       'Portrait': <ContactIcon className="h-4 w-4" />,
       'Other': <DashboardCircleAddIcon className="h-4 w-4" />
     };
-    return iconConfig[eventType as keyof typeof iconConfig] || iconConfig.Other;
-  };
-
-  const getEventTypeIconStyle = (eventType: string) => {
+    
     const iconStyles = {
       'Wedding': 'bg-wedding-color text-white',
       'Pre-Wedding': 'bg-pre-wedding-color text-white',
@@ -192,20 +191,32 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
       'Portrait': 'bg-pre-wedding-color text-white',
       'Other': 'bg-others-color text-white'
     };
-    return iconStyles[eventType as keyof typeof iconStyles] || iconStyles.Other;
-  };
 
-  const getStatusColor = () => {
-    if (quotation.converted_to_event) return 'bg-green-100 text-green-800';
-    if (quotation.valid_until && isExpired(quotation.valid_until)) return 'bg-red-100 text-red-800';
-    return 'bg-blue-100 text-blue-800';
-  };
+    return {
+      icon: iconConfig[quotation.event_type as keyof typeof iconConfig] || iconConfig.Other,
+      style: iconStyles[quotation.event_type as keyof typeof iconStyles] || iconStyles.Other
+    };
+  }, [quotation.event_type]);
 
-  const getStatusText = () => {
-    if (quotation.converted_to_event) return 'Converted';
-    if (quotation.valid_until && isExpired(quotation.valid_until)) return 'Expired';
-    return 'Active';
-  };
+  // Memoize status calculations
+  const statusInfo = useMemo(() => {
+    const getStatusColor = () => {
+      if (quotation.converted_to_event) return 'bg-green-100 text-green-800';
+      if (quotation.valid_until && isExpired) return 'bg-red-100 text-red-800';
+      return 'bg-blue-100 text-blue-800';
+    };
+
+    const getStatusText = () => {
+      if (quotation.converted_to_event) return 'Converted';
+      if (quotation.valid_until && isExpired) return 'Expired';
+      return 'Active';
+    };
+
+    return {
+      color: getStatusColor(),
+      text: getStatusText()
+    };
+  }, [quotation.converted_to_event, quotation.valid_until, isExpired]);
 
   // No badges needed for simple quotation layout
 
@@ -218,8 +229,8 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
   const days = quotationDetails?.days || [];
   const totalDays = days.length || 1;
 
-  // Helper function to format date range
-  const formatDateRange = () => {
+  // Memoize date formatting
+  const formattedDateRange = useMemo(() => {
     const startDate = new Date(quotation.event_date);
     
     if (totalDays === 1) {
@@ -246,9 +257,10 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
       
       return `${startFormatted} - ${endFormatted}`;
     }
-  };
+  }, [quotation.event_date, totalDays]);
 
-  const metadata = [
+  // Memoize metadata array
+  const metadata = useMemo(() => [
     // Client (always show)
     {
       icon: <ContactIcon className="h-4 w-4 text-primary" />,
@@ -257,7 +269,7 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
     // Event Date Range (always show)
     {
       icon: <Calendar01Icon className="h-4 w-4 text-primary" />,
-      value: formatDateRange(),
+      value: formattedDateRange,
       isDate: true
     },
     // Venue (always show)
@@ -279,11 +291,18 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
         </div>
       ) : `₹${originalAmount.toLocaleString('en-IN')}`
     }
-  ];
+  ], [quotation.client?.name, formattedDateRange, quotation.venue, hasDiscount, originalAmount, discountedAmount]);
 
-  const actions = [
-    { label: 'Edit', onClick: () => onEdit && onEdit(quotation), variant: 'outline' as const, icon: <Edit02Icon className="h-4 w-4 text-foreground" strokeWidth={1.5} /> },
-    { label: 'Discount', onClick: () => setDiscountDialogOpen(true), variant: 'outline' as const, icon: <PercentIcon className="h-4 w-4 text-foreground" strokeWidth={1.5} /> },
+  // Memoize action handlers
+  const handleEdit = useCallback(() => onEdit && onEdit(quotation), [onEdit, quotation]);
+  const handleOpenDiscountDialog = useCallback(() => setDiscountDialogOpen(true), []);
+  const handleShareClick = useCallback(() => handleShare(quotation), [handleShare, quotation]);
+  const handleDelete = useCallback(() => onDelete && onDelete(quotation.id), [onDelete, quotation.id]);
+
+  // Memoize actions array
+  const actions = useMemo(() => [
+    { label: 'Edit', onClick: handleEdit, variant: 'outline' as const, icon: <Edit02Icon className="h-4 w-4 text-foreground" strokeWidth={1.5} /> },
+    { label: 'Discount', onClick: handleOpenDiscountDialog, variant: 'outline' as const, icon: <PercentIcon className="h-4 w-4 text-foreground" strokeWidth={1.5} /> },
     { 
       label: 'Download', 
       onClick: generatePDF, 
@@ -297,7 +316,7 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
     },
     { 
       label: 'Share', 
-      onClick: () => handleShare(quotation), 
+      onClick: handleShareClick, 
       variant: 'outline' as const, 
       icon: isSharing ? (
         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -306,8 +325,8 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
       ),
       disabled: isSharing
     },
-    ...(onDelete ? [{ label: 'Delete', onClick: () => onDelete(quotation.id), variant: 'outline' as const, icon: <Delete02Icon className="h-4 w-4 text-destructive" strokeWidth={1.5} /> }] : [])
-  ];
+    ...(onDelete ? [{ label: 'Delete', onClick: handleDelete, variant: 'outline' as const, icon: <Delete02Icon className="h-4 w-4 text-destructive" strokeWidth={1.5} /> }] : [])
+  ], [handleEdit, handleOpenDiscountDialog, generatePDF, isDownloading, handleShareClick, isSharing, onDelete, handleDelete]);
 
   return (
     <CentralizedCard
@@ -319,13 +338,13 @@ const QuotationCardGrid = ({ quotation, onUpdate, onEdit, onDelete, firmData }: 
     >
       {/* Event Type Icon */}
       <div className="absolute top-4 right-4">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getEventTypeIconStyle(quotation.event_type)}`}>
-          {getEventTypeIcon(quotation.event_type)}
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${eventTypeInfo.style}`}>
+          {eventTypeInfo.icon}
         </div>
       </div>
       {/* Status indicators - only show for active quotations */}
       <div className="flex items-center justify-center gap-4 pt-1">
-        {quotation.valid_until && !isExpired(quotation.valid_until) && (
+        {quotation.valid_until && !isExpired && (
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-primary" />
             <span className="text-xs font-medium text-muted-foreground">

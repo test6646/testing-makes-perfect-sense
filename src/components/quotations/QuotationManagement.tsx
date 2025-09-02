@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -138,7 +138,7 @@ const QuotationManagement = () => {
     setShowBuilder(true);
   };
 
-  const handleEditQuotation = (quotation: Quotation) => {
+  const handleEditQuotation = useCallback((quotation: Quotation) => {
     setEditingQuotation(quotation);
     setFormData({
       title: quotation.title,
@@ -151,9 +151,9 @@ const QuotationManagement = () => {
     });
     setIsEditingMode(true);
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({
       title: '',
       client_id: '',
@@ -165,12 +165,12 @@ const QuotationManagement = () => {
     });
     setEditingQuotation(null);
     setIsEditingMode(false);
-  };
+  }, []);
 
-  const handleNewQuotation = () => {
+  const handleNewQuotation = useCallback(() => {
     resetForm();
     setIsDialogOpen(true);
-  };
+  }, [resetForm]);
 
   // Apply basic filtering and process custom filters
   const processedQuotations = useMemo(() => {
@@ -261,12 +261,12 @@ const QuotationManagement = () => {
           <QuotationFormDialog
             clients={clients}
             isOpen={isDialogOpen}
-            onOpenChange={(open) => {
+            onOpenChange={useCallback((open: boolean) => {
               setIsDialogOpen(open);
               if (!open) {
                 setEditingQuotation(null);
               }
-            }}
+            }, [])}
             onSubmit={handleSubmit}
             onNewQuotation={handleNewQuotation}
             editingQuotation={isEditingMode ? editingQuotation : null}
