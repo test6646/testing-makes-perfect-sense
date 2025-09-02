@@ -6,8 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SearchableSelect } from '@/components/ui/searchable-select';
-import { VenueDropdownSelect } from '@/components/forms/VenueDropdownSelect';
 import { Add01Icon } from 'hugeicons-react';
 import { Client, EventType, Quotation } from '@/types/studio';
 import { InlineDatePicker } from '@/components/ui/inline-date-picker';
@@ -46,6 +44,8 @@ const eventTypes: EventType[] = ['Ring-Ceremony', 'Pre-Wedding', 'Wedding', 'Mat
 
 const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuotation, editingQuotation, formData: initialFormData }: QuotationFormDialogProps) => {
   const { currentFirmId } = useAuth();
+  const [venueSuggestions, setVenueSuggestions] = useState<string[]>([]);
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
   const [formData, setFormData] = useState<QuotationFormData>({
     title: '',
     client_id: '',
@@ -92,14 +92,60 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
     return thirtyDaysFromToday < oneDayBeforeEvent ? thirtyDaysFromToday : oneDayBeforeEvent;
   };
 
+  // Load venue suggestions from database
+  const loadVenueSuggestions = async () => {
+    if (!currentFirmId) return;
+    
+    try {
+      // Get unique venues from both events and quotations
+      const [eventsData, quotationsData] = await Promise.all([
+        supabase
+          .from('events')
+          .select('venue')
+          .eq('firm_id', currentFirmId)
+          .not('venue', 'is', null)
+          .not('venue', 'eq', ''),
+        supabase
+          .from('quotations')
+          .select('venue')
+          .eq('firm_id', currentFirmId)
+          .not('venue', 'is', null)
+          .not('venue', 'eq', '')
+      ]);
 
-  // Auto-set expiry date when event date changes (works for both creation and editing)
+      const venues = new Set<string>();
+      
+      if (eventsData.data) {
+        eventsData.data.forEach(item => {
+          if (item.venue && item.venue.trim()) venues.add(item.venue.trim());
+        });
+      }
+      
+      if (quotationsData.data) {
+        quotationsData.data.forEach(item => {
+          if (item.venue && item.venue.trim()) venues.add(item.venue.trim());
+        });
+      }
+
+      setVenueSuggestions(Array.from(venues).sort());
+    } catch (error) {
+      console.error('Error loading venue suggestions:', error);
+    }
+  };
+
   useEffect(() => {
-    if (formData.event_date && isOpen) {
+    if (isOpen) {
+      loadVenueSuggestions();
+    }
+  }, [isOpen, currentFirmId]);
+
+  // Auto-set expiry date when event date changes (only for new forms, not editing)
+  useEffect(() => {
+    if (formData.event_date && isOpen && !editingQuotation) {
       const defaultExpiry = calculateDefaultExpiry(formData.event_date);
       setFormData(prev => ({ ...prev, valid_until: defaultExpiry }));
     }
-  }, [formData.event_date?.getTime(), isOpen]);
+  }, [formData.event_date, isOpen, editingQuotation]);
 
   // Validate event date (must be future date)
   const isValidEventDate = (date: Date | undefined) => {
@@ -121,6 +167,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
         valid_until: undefined
       });
     }
+    setShowVenueSuggestions(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -142,7 +189,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
 
   const handleOpenChange = (open: boolean) => {
     onOpenChange(open);
-    // Don't reset form here to prevent scroll jump - parent handles reset
+    if (!open) resetForm();
   };
 
   return (
@@ -170,16 +217,21 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
             </div>
             <div className="space-y-2">
               <Label htmlFor="client">Client *</Label>
-              <SearchableSelect
+              <Select
                 value={formData.client_id}
                 onValueChange={(value) => setFormData({ ...formData, client_id: value })}
-                options={clients.map(client => ({
-                  value: client.id,
-                  label: client.name
-                }))}
-                placeholder="Select a client"
-                searchPlaceholder="Search clients..."
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -220,14 +272,47 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="venue">Venue</Label>
-                <VenueDropdownSelect
+            <div className="space-y-2">
+              <Label htmlFor="venue">Venue</Label>
+              <div className="relative">
+                <Input
+                  id="venue"
+                  placeholder="Type venue name..."
                   value={formData.venue}
-                  onValueChange={(value) => setFormData({ ...formData, venue: value })}
-                  placeholder="Select or add venue..."
+                  onFocus={() => setShowVenueSuggestions(true)}
+                  onBlur={() => {
+                    // Delay hiding to allow clicking on suggestions
+                    setTimeout(() => setShowVenueSuggestions(false), 150);
+                  }}
+                  onChange={(e) => {
+                    setFormData({ ...formData, venue: e.target.value });
+                    setShowVenueSuggestions(true);
+                  }}
+                  className="pr-8"
                 />
+                {showVenueSuggestions && formData.venue && venueSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-auto bg-background border border-border rounded-md shadow-lg">
+                    {venueSuggestions
+                      .filter(venue => venue.toLowerCase().includes(formData.venue.toLowerCase()))
+                      .slice(0, 10)
+                      .map((venue, index) => (
+                        <div
+                          key={index}
+                          className="px-3 py-2 cursor-pointer hover:bg-muted text-sm"
+                          onMouseDown={(e) => {
+                            e.preventDefault(); // Prevent blur
+                            setFormData({ ...formData, venue });
+                            setShowVenueSuggestions(false);
+                          }}
+                        >
+                          {venue}
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
               </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="valid_until">Valid Until</Label>
               <div className="h-10">
@@ -260,7 +345,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
               Cancel
             </Button>
             <Button type="submit" className="rounded-full">
-              {editingQuotation ? 'Update' : 'Continue'}
+              {editingQuotation ? 'Update & Continue to Builder' : 'Continue to Builder'}
             </Button>
           </div>
         </form>
