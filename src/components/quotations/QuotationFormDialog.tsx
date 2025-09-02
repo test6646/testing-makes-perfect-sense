@@ -56,9 +56,9 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
     valid_until: undefined
   });
 
-  // Initialize form data when editing
+  // Initialize form data when editing or dialog opens
   useEffect(() => {
-    if (editingQuotation && initialFormData && isOpen) {
+    if (editingQuotation && initialFormData) {
       setFormData({
         title: initialFormData.title,
         client_id: initialFormData.client_id,
@@ -68,7 +68,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
         description: initialFormData.description,
         valid_until: initialFormData.valid_until ? new Date(initialFormData.valid_until) : undefined
       });
-    } else if (!editingQuotation && isOpen) {
+    } else if (!editingQuotation) {
       // Reset to default when not editing
       setFormData({
         title: '',
@@ -93,13 +93,13 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
   };
 
 
-  // Auto-set expiry date when event date changes (only when dialog is open)
+  // Auto-set expiry date when event date changes (only when not editing)
   useEffect(() => {
-    if (formData.event_date && isOpen) {
+    if (formData.event_date && !editingQuotation) {
       const defaultExpiry = calculateDefaultExpiry(formData.event_date);
       setFormData(prev => ({ ...prev, valid_until: defaultExpiry }));
     }
-  }, [formData.event_date?.getTime()]);
+  }, [formData.event_date?.getTime(), editingQuotation]);
 
   // Validate event date (must be future date)
   const isValidEventDate = (date: Date | undefined) => {
@@ -109,19 +109,6 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
     return date > today;
   };
 
-  const resetForm = () => {
-    if (!editingQuotation) {
-      setFormData({
-        title: '',
-        client_id: '',
-        event_type: 'Wedding',
-        event_date: undefined,
-        venue: '',
-        description: '',
-        valid_until: undefined
-      });
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,13 +127,9 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
     // Don't reset here - parent handles reset to prevent scroll jump
   };
 
-  const handleOpenChange = (open: boolean) => {
-    onOpenChange(open);
-    // Don't reset form here to prevent scroll jump - parent handles reset
-  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
         <Button onClick={onNewQuotation} className="rounded-full p-3">
           <Add01Icon className="h-4 w-4" />
