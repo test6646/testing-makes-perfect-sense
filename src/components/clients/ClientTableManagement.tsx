@@ -226,7 +226,6 @@ const ClientTableManagement = () => {
             });
             
             setIsDialogOpen(false);
-            setEditingClient(null);
             loadClients();
             setConfirmDialog(prev => ({ ...prev, open: false }));
           }
@@ -252,7 +251,6 @@ const ClientTableManagement = () => {
         });
         
         setIsDialogOpen(false);
-        setEditingClient(null);
         loadClients();
       }
     } catch (error: any) {
@@ -375,12 +373,26 @@ const ClientTableManagement = () => {
     setEditingClient(null);
   };
 
-  // Reset form when dialog closes
+  // Reset form when dialog closes or editing client changes
   useEffect(() => {
-    if (!isDialogOpen) {
-      resetForm();
+    if (!isDialogOpen || !editingClient) {
+      setFormData({
+        name: '',
+        phone: '',
+        email: '',
+        address: '',
+        notes: ''
+      });
+    } else if (editingClient) {
+      setFormData({
+        name: editingClient.name,
+        phone: editingClient.phone,
+        email: editingClient.email || '',
+        address: editingClient.address || '',
+        notes: editingClient.notes || ''
+      });
     }
-  }, [isDialogOpen]);
+  }, [isDialogOpen, editingClient]);
 
   if (loading) {
     return <PageTableSkeleton />;
@@ -414,7 +426,12 @@ const ClientTableManagement = () => {
             />
           )}
           {isAdmin && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setEditingClient(null);
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button className="rounded-full p-3">
                   <Add01Icon className="h-4 w-4" />

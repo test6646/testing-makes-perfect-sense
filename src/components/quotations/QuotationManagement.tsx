@@ -261,7 +261,12 @@ const QuotationManagement = () => {
           <QuotationFormDialog
             clients={clients}
             isOpen={isDialogOpen}
-            onOpenChange={setIsDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setEditingQuotation(null);
+              }
+            }}
             onSubmit={handleSubmit}
             onNewQuotation={handleNewQuotation}
             editingQuotation={isEditingMode ? editingQuotation : null}
