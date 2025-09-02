@@ -264,10 +264,7 @@ const QuotationManagement = () => {
             onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) {
-                // Use setTimeout to prevent scroll jump during dialog close
-                setTimeout(() => {
-                  resetForm();
-                }, 0);
+                resetForm();
               }
             }}
             onSubmit={handleSubmit}
