@@ -442,10 +442,11 @@ export const TaskFormDialog = ({
           sendAssignmentNotification();
         }
       }
-
+      
       onSuccess?.();
       onOpenChange(false);
-      form.reset();
+      // Defer reset to prevent scroll jump
+      setTimeout(() => form.reset(), 0);
 
     } catch (error: any) {
       toast({
@@ -634,7 +635,11 @@ export const TaskFormDialog = ({
               )}
             />
             <DialogFooter className="flex flex-row gap-3">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+              <Button type="button" variant="outline" onClick={() => {
+                // Defer reset to prevent scroll jump
+                onOpenChange(false);
+                setTimeout(() => form.reset(), 0);
+              }} className="flex-1">
                 Cancel
               </Button>
               <Button

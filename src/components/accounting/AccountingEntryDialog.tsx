@@ -260,8 +260,11 @@ export const AccountingEntryDialog = ({ entry, trigger, onSuccess }: AccountingE
       setOpen(false);
       setShowCompanyDialog(false);
       setPendingSubmission(null);
-      form.reset();
-      setUploadedFileUrl('');
+      // Defer reset to prevent scroll jump
+      setTimeout(() => {
+        form.reset();
+        setUploadedFileUrl('');
+      }, 0);
       
       // Call the onSuccess callback to trigger refresh
       onSuccess?.();
@@ -292,11 +295,13 @@ export const AccountingEntryDialog = ({ entry, trigger, onSuccess }: AccountingE
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
-      // Reset all state when dialog closes
-      setShowCompanyDialog(false);
-      setPendingSubmission(null);
-      setUploadedFileUrl('');
-      form.reset();
+      // Defer reset to prevent scroll jump
+      setTimeout(() => {
+        setShowCompanyDialog(false);
+        setPendingSubmission(null);
+        setUploadedFileUrl('');
+        form.reset();
+      }, 0);
     }
   };
 

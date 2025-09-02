@@ -48,7 +48,10 @@ const TaskManagementCore = () => {
   const handleTaskSuccess = async () => {
     await loadTasks();
     setIsDialogOpen(false);
-    setEditingTask(null);
+    // Defer state reset to prevent scroll jump
+    setTimeout(() => {
+      setEditingTask(null);
+    }, 0);
   };
 
   const handleEdit = (task: Task) => {
@@ -151,7 +154,13 @@ const TaskManagementCore = () => {
       {isAdmin && (
         <TaskFormDialog
           open={isDialogOpen}
-          onOpenChange={setIsDialogOpen}
+          onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              // Defer state reset to prevent scroll jump
+              setTimeout(() => setEditingTask(null), 0);
+            }
+          }}
           onSuccess={handleTaskSuccess}
           editingTask={editingTask}
           events={events}

@@ -77,7 +77,10 @@ const ExpenseManagement = () => {
 
   const handleExpenseUpdated = () => {
     setEditDialogOpen(false);
-    setEditingExpense(null);
+    // Defer state reset to prevent scroll jump
+    setTimeout(() => {
+      setEditingExpense(null);
+    }, 0);
     loadExpenses();
   };
 
@@ -317,7 +320,13 @@ const ExpenseManagement = () => {
 
       <ExpenseFormDialog
         open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            // Defer state reset to prevent scroll jump
+            setTimeout(() => setEditingExpense(null), 0);
+          }
+        }}
         onExpenseCreated={handleExpenseUpdated}
         expense={editingExpense}
         mode="edit"
