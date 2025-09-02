@@ -226,7 +226,7 @@ const ClientTableManagement = () => {
             });
             
             setIsDialogOpen(false);
-            resetForm();
+            setEditingClient(null);
             loadClients();
             setConfirmDialog(prev => ({ ...prev, open: false }));
           }
@@ -252,7 +252,7 @@ const ClientTableManagement = () => {
         });
         
         setIsDialogOpen(false);
-        resetForm();
+        setEditingClient(null);
         loadClients();
       }
     } catch (error: any) {
@@ -375,6 +375,13 @@ const ClientTableManagement = () => {
     setEditingClient(null);
   };
 
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isDialogOpen) {
+      resetForm();
+    }
+  }, [isDialogOpen]);
+
   if (loading) {
     return <PageTableSkeleton />;
   }
@@ -407,10 +414,7 @@ const ClientTableManagement = () => {
             />
           )}
           {isAdmin && (
-            <Dialog open={isDialogOpen} onOpenChange={(open) => { 
-              setIsDialogOpen(open); 
-              if (!open) resetForm(); 
-            }}>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="rounded-full p-3">
                   <Add01Icon className="h-4 w-4" />
