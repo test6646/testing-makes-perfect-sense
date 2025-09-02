@@ -58,7 +58,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
 
   // Initialize form data when editing
   useEffect(() => {
-    if (editingQuotation && initialFormData) {
+    if (editingQuotation && initialFormData && isOpen) {
       setFormData({
         title: initialFormData.title,
         client_id: initialFormData.client_id,
@@ -68,7 +68,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
         description: initialFormData.description,
         valid_until: initialFormData.valid_until ? new Date(initialFormData.valid_until) : undefined
       });
-    } else if (!editingQuotation) {
+    } else if (!editingQuotation && isOpen) {
       // Reset to default when not editing
       setFormData({
         title: '',
@@ -80,7 +80,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
         valid_until: undefined
       });
     }
-  }, [editingQuotation, initialFormData, isOpen]);
+  }, [editingQuotation, initialFormData]);
 
   // Calculate default expiry date based on event date
   const calculateDefaultExpiry = (eventDate: Date) => {
@@ -93,13 +93,13 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
   };
 
 
-  // Auto-set expiry date when event date changes (works for both creation and editing)
+  // Auto-set expiry date when event date changes (only when dialog is open)
   useEffect(() => {
     if (formData.event_date && isOpen) {
       const defaultExpiry = calculateDefaultExpiry(formData.event_date);
       setFormData(prev => ({ ...prev, valid_until: defaultExpiry }));
     }
-  }, [formData.event_date?.getTime(), isOpen]);
+  }, [formData.event_date?.getTime()]);
 
   // Validate event date (must be future date)
   const isValidEventDate = (date: Date | undefined) => {
@@ -137,7 +137,7 @@ const QuotationFormDialog = ({ clients, isOpen, onOpenChange, onSubmit, onNewQuo
     }
     
     onSubmit(formData);
-    resetForm();
+    // Don't reset here - parent handles reset to prevent scroll jump
   };
 
   const handleOpenChange = (open: boolean) => {
