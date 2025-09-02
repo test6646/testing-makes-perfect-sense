@@ -4,38 +4,7 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-// Hook to preserve scroll position when dialogs open/close
-const useScrollPreservation = () => {
-  const scrollY = React.useRef(0);
-  
-  const preserveScroll = React.useCallback(() => {
-    scrollY.current = window.scrollY;
-  }, []);
-  
-  const restoreScroll = React.useCallback(() => {
-    // Use setTimeout to ensure the scroll restoration happens after DOM updates
-    setTimeout(() => {
-      window.scrollTo(0, scrollY.current);
-    }, 0);
-  }, []);
-  
-  return { preserveScroll, restoreScroll };
-};
-
-const Dialog = ({ onOpenChange, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) => {
-  const { preserveScroll, restoreScroll } = useScrollPreservation();
-  
-  const handleOpenChange = React.useCallback((open: boolean) => {
-    if (open) {
-      preserveScroll();
-    } else {
-      restoreScroll();
-    }
-    onOpenChange?.(open);
-  }, [onOpenChange, preserveScroll, restoreScroll]);
-  
-  return <DialogPrimitive.Root onOpenChange={handleOpenChange} {...props} />;
-};
+const Dialog = DialogPrimitive.Root
 
 const DialogTrigger = DialogPrimitive.Trigger
 
