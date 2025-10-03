@@ -117,6 +117,51 @@ export const useEvents = () => {
 
   useEffect(() => {
     loadEvents();
+
+    if (!currentFirmId) return;
+
+    // Set up real-time listeners for events, payments, and closing balances
+    const eventsChannel = supabase
+      .channel('events-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'events',
+        filter: `firm_id=eq.${currentFirmId}`
+      }, () => {
+        loadEvents();
+      })
+      .subscribe();
+
+    const paymentsChannel = supabase
+      .channel('payments-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'payments',
+        filter: `firm_id=eq.${currentFirmId}`
+      }, () => {
+        loadEvents();
+      })
+      .subscribe();
+
+    const closingBalancesChannel = supabase
+      .channel('closing-balances-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'event_closing_balances',
+        filter: `firm_id=eq.${currentFirmId}`
+      }, () => {
+        loadEvents();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(eventsChannel);
+      supabase.removeChannel(paymentsChannel);
+      supabase.removeChannel(closingBalancesChannel);
+    };
   }, [currentFirmId]);
 
   return {
