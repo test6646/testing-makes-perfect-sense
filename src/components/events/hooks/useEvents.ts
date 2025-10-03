@@ -106,7 +106,7 @@ export const useEvents = () => {
       });
       
       // Only set state when ALL data is loaded and processed
-      setEvents(processedEvents);
+      setEvents(processedEvents as unknown as Event[]);
       setDataReadyForRender(true);
     } catch (error: any) {
       // Error handling - removed console.log for performance

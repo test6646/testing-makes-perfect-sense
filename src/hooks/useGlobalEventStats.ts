@@ -76,7 +76,7 @@ export const useGlobalEventStats = () => {
         .order('event_date', { ascending: false });
 
       if (error) throw error;
-      setEvents(data || []);
+      setEvents((data as unknown as Event[]) || []);
     } catch (error) {
       console.error('Error fetching global event stats:', error);
     } finally {

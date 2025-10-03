@@ -56,9 +56,23 @@ export interface Event {
   editor?: StaffMember;
   tasks?: TaskFromDB[];
   payments?: Payment[];
+  event_closing_balances?: EventClosingBalance[];
 
   // Event staff assignments
   event_staff_assignments?: EventStaffAssignment[];
+}
+
+export interface EventClosingBalance {
+  id: string;
+  event_id: string;
+  firm_id: string;
+  closing_amount: number;
+  closing_reason?: string;
+  total_bill: number;
+  collected_amount: number;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
 }
 
 export interface Quotation {
