@@ -324,8 +324,48 @@ export const useBackendFilters = (config: FilterConfig, options: UseBackendFilte
       )
       .subscribe();
 
+    // For events table, also listen to payments and closing balances
+    let paymentsChannel: any = null;
+    let closingBalancesChannel: any = null;
+
+    if (config.tableName === 'events') {
+      paymentsChannel = supabase
+        .channel('payments_changes_for_events')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'payments',
+            filter: `firm_id=eq.${currentFirmId}`,
+          },
+          () => {
+            resetPagination();
+          }
+        )
+        .subscribe();
+
+      closingBalancesChannel = supabase
+        .channel('closing_balances_changes_for_events')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'event_closing_balances',
+            filter: `firm_id=eq.${currentFirmId}`,
+          },
+          () => {
+            resetPagination();
+          }
+        )
+        .subscribe();
+    }
+
     return () => {
       supabase.removeChannel(channel);
+      if (paymentsChannel) supabase.removeChannel(paymentsChannel);
+      if (closingBalancesChannel) supabase.removeChannel(closingBalancesChannel);
     };
   }, [config.tableName, currentFirmId, options.enableRealtime, resetPagination]);
 
