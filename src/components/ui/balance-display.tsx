@@ -18,6 +18,16 @@ interface BalanceDisplayProps {
 }
 
 const BalanceDisplay = ({ event, className, showIcon = true, size = 'md' }: BalanceDisplayProps) => {
+  // Debug: Log what we receive
+  if ((event as any).total_amount === 115000) {
+    console.log('💰 BalanceDisplay - 115k Event:', {
+      total: event.total_amount,
+      advance: event.advance_amount,
+      closingBalances: event.event_closing_balances,
+      closingBalancesType: Array.isArray(event.event_closing_balances) ? 'array' : typeof event.event_closing_balances
+    });
+  }
+  
   const balanceInfo = calculateBalanceDisplayInfo(event);
   
   const sizeClasses = {
