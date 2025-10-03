@@ -30,7 +30,18 @@ export interface ClosingBalanceData {
  * Calculate total closed amount for an event
  */
 export function calculateTotalClosed(event: EventFinancials): number {
-  const closingBalances = Array.isArray(event.event_closing_balances) ? event.event_closing_balances : [];
+  // Handle both single object and array of closing balances
+  let closingBalances: ClosingBalanceData[] = [];
+  
+  if (event.event_closing_balances) {
+    if (Array.isArray(event.event_closing_balances)) {
+      closingBalances = event.event_closing_balances;
+    } else {
+      // Single object case - wrap it in an array
+      closingBalances = [event.event_closing_balances as ClosingBalanceData];
+    }
+  }
+  
   return closingBalances.reduce((sum, closing) => sum + (closing.closing_amount || 0), 0);
 }
 

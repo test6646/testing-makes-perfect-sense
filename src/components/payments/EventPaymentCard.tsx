@@ -60,18 +60,6 @@ const EventPaymentCard = ({ event, onEdit, onPaymentClick, onViewDetails, onDown
   const [diskDialogOpen, setDiskDialogOpen] = useState(false);
   const [pdfDownloadDialogOpen, setPdfDownloadDialogOpen] = useState(false);
   
-  // Debug: Check if closing balances are in the event object
-  if (event.title?.includes('Nirav')) {
-    console.log('🔍 EventPaymentCard - Nirav Event:', {
-      title: event.title,
-      total: event.total_amount,
-      advance: event.advance_amount,
-      closingBalances: (event as any).event_closing_balances,
-      hasClosingBalances: !!(event as any).event_closing_balances,
-      closingBalancesLength: (event as any).event_closing_balances?.length
-    });
-  }
-  
   // Use loading states from parent if provided, otherwise maintain local state
   const isSharing = loadingStates?.sharing || false;
   const isViewing = loadingStates?.viewing || false;
