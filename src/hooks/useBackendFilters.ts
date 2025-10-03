@@ -293,10 +293,17 @@ export const useBackendFilters = (config: FilterConfig, options: UseBackendFilte
     setPageSize(newPageSize);
   }, []);
 
-  // Reset pagination when filters change
+  // Reset pagination when filters change (but not when search term changes while typing)
   useEffect(() => {
     resetPagination();
-  }, [isSearchActive, debouncedSearchTerm, activeFilters, sortBy, sortOrder, resetPagination]);
+  }, [activeFilters, sortBy, sortOrder, resetPagination]);
+
+  // Separate effect for search - only reset when search is applied or cleared
+  useEffect(() => {
+    if (isSearchActive) {
+      resetPagination();
+    }
+  }, [isSearchActive, debouncedSearchTerm, resetPagination]);
 
   // Fetch data when pagination resets or page changes
   useEffect(() => {
