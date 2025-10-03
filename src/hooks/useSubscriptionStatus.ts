@@ -34,8 +34,6 @@ export const useSubscriptionStatus = (firmId?: string) => {
     const retryDelay = 1000 * (retryCount + 1); // Progressive delay: 1s, 2s, 3s
 
     try {
-      console.log(`🔍 Checking subscription for firm ${firmId} (attempt ${retryCount + 1})`);
-      
       const { data, error } = await supabase.functions.invoke('check-firm-subscription', {
         body: { firmId },
       });
@@ -45,12 +43,10 @@ export const useSubscriptionStatus = (firmId?: string) => {
         throw new Error(error.message || 'Failed to check subscription');
       }
       
-      console.log('✅ Subscription check successful:', data);
       setSubscription(data);
       setInitialized(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error(`❌ Subscription check failed (attempt ${retryCount + 1}):`, err);
       
       // Retry logic for network errors
       if (retryCount < maxRetries && (
@@ -58,7 +54,6 @@ export const useSubscriptionStatus = (firmId?: string) => {
         errorMessage.includes('Failed to send a request') ||
         errorMessage.includes('Network error')
       )) {
-        console.log(`🔄 Retrying subscription check in ${retryDelay}ms...`);
         setTimeout(() => {
           checkSubscription(isBackground, retryCount + 1);
         }, retryDelay);
@@ -66,9 +61,6 @@ export const useSubscriptionStatus = (firmId?: string) => {
       }
       
       setError(errorMessage);
-      
-      // No fallback - let user know there's an error
-      console.log('❌ Subscription check failed persistently, no fallback');
       setSubscription(null);
       setInitialized(true);
     } finally {

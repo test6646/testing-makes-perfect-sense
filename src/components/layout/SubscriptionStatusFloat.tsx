@@ -28,37 +28,23 @@ export const SubscriptionStatusFloat: React.FC = () => {
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
 
-  // Debug logging to help identify issues
-  console.log('SubscriptionStatusFloat Debug:', {
-    initialized,
-    loading,
-    subscription,
-    isTrialExpiring,
-    isSubscriptionExpiring,
-    daysUntilExpiry
-  });
-
   // Don't show if not initialized or loading
   if (!initialized || loading || !subscription) {
-    console.log('SubscriptionStatusFloat: Not showing - not initialized, loading, or no subscription');
     return null;
   }
 
   // Show for trial users (always show trial status)
   if (subscription.status === 'trial') {
-    console.log('SubscriptionStatusFloat: Showing for trial user');
     // Always show trial status - don't return null here
   }
 
   // Show for expired subscriptions
   else if (subscription.status === 'expired') {
-    console.log('SubscriptionStatusFloat: Showing for expired subscription');
     // Always show expired status - don't return null here
   }
 
   // Only hide for active paid subscriptions that are not expiring
   else if (subscription.status === 'active' && !isSubscriptionExpiring) {
-    console.log('SubscriptionStatusFloat: Not showing - active subscription not expiring');
     return null;
   }
 
