@@ -1,0 +1,28 @@
+-- Update accounting_category enum to include proper photography/videography business categories
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Revenue';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Cameras';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Lenses';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Lighting Equipment';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Audio Equipment';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Drones';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Stabilizers & Gimbals';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Tripods & Stands';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Storage & Backup';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Computer & Software';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Office Equipment';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Vehicles';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Rent';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Utilities';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Marketing & Advertising';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Insurance';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Maintenance & Repairs';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Travel & Transportation';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Professional Fees';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Staff Salaries';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Freelancer Payments';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Bank Charges';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Taxes';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Loans & EMI';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Depreciation';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Miscellaneous';
+ALTER TYPE accounting_category ADD VALUE IF NOT EXISTS 'Custom';
