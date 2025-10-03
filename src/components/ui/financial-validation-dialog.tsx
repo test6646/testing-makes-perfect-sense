@@ -1,12 +1,5 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { UnifiedDialog } from "./unified-dialog"
+import { AlertCircle } from "lucide-react"
 
 interface FinancialValidationDialogProps {
   open: boolean;
@@ -24,22 +17,15 @@ export function FinancialValidationDialog({
   onOk,
 }: FinancialValidationDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="sm:max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-destructive">
-            {title}
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-muted-foreground">
-            {description}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogAction onClick={onOk} className="bg-primary text-primary-foreground hover:bg-primary/90">
-            OK, I'll Fix It
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <UnifiedDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onConfirm={onOk}
+      variant="warning"
+      title={title}
+      description={description}
+      confirmText="OK, I'll Fix It"
+      cancelText="Close"
+    />
   );
 }

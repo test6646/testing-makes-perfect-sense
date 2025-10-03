@@ -1,13 +1,5 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { UnifiedDialog } from "./unified-dialog"
+import { Users } from "lucide-react"
 
 interface ConflictingEvent {
   eventId: string;
@@ -46,28 +38,45 @@ export function StaffAssignmentConflictDialog({
     });
   };
 
+  const details = (
+    <div className="space-y-2">
+      <p className="font-medium text-foreground">Conflicting Events:</p>
+      {conflictingEvents.slice(0, 3).map((conflict, idx) => (
+        <div key={idx} className="text-xs space-y-1">
+          <p className="font-medium">{conflict.eventTitle || 'Untitled Event'}</p>
+          <p className="text-muted-foreground">
+            Role: {conflict.role} • {formatDate(conflict.dateRange.startDate)} - {formatDate(conflict.dateRange.endDate)}
+          </p>
+        </div>
+      ))}
+      {conflictingEvents.length > 3 && (
+        <p className="text-xs text-muted-foreground">
+          +{conflictingEvents.length - 3} more conflict{conflictingEvents.length - 3 > 1 ? 's' : ''}
+        </p>
+      )}
+    </div>
+  );
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="sm:max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-foreground">
-            Staff Assignment Conflict
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-muted-foreground">
-            <span className="font-semibold text-primary">{staffName}</span> is already assigned to {conflictingEvents.length} other event{conflictingEvents.length > 1 ? 's' : ''} during this time.
-            <br /><br />
-            Do you want to assign them as <span className="font-semibold text-primary">{role}</span> anyway?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel} className="bg-secondary text-secondary-foreground hover:bg-secondary/80">
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className="bg-primary text-primary-foreground hover:bg-primary/90">
-            Assign Anyway
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <UnifiedDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+      variant="conflict"
+      title="Staff Assignment Conflict"
+      description={
+        <>
+          <span className="font-semibold">{staffName}</span> is already assigned to{' '}
+          <span className="font-semibold">{conflictingEvents.length}</span> other event
+          {conflictingEvents.length > 1 ? 's' : ''} during this time.
+          <br /><br />
+          Do you want to assign them as <span className="font-semibold">{role}</span> anyway?
+        </>
+      }
+      details={details}
+      confirmText="Assign Anyway"
+      cancelText="Cancel"
+    />
   );
 }
